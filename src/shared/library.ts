@@ -10,6 +10,7 @@
  * Pure functions only (no DOM, no fetch) so it runs in the browser, the Worker and vitest.
  */
 import type { Card, CustomTags, Deck, LibraryCard, RelStatus, Section, Tier } from "./types.ts";
+import { genesysPoints } from "./formats.ts";
 
 // --------------------------------------------------------------------------- //
 // Constants (same values as the Python)
@@ -584,6 +585,7 @@ export const SORT_KEYS = {
   tier: (c) => c.tier_score ?? null,
   views: (c) => c.views ?? null,
   viewsweek: (c) => c.viewsweek ?? null,
+  "genesys-points": (c) => genesysPoints(c),
   "deck-date": (c, a) => deckDate(c, a),
   "deck-year": (c, a) => (deckDate(c, a) || "").slice(0, 4) || null,
 } satisfies Record<string, KeyFn>;

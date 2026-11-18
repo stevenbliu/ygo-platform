@@ -21,7 +21,7 @@ import { genesysPoints } from "../../shared/formats.ts";
 
 // ----------------------------------------------------------------------------- options
 const SORT_OPTIONS: [SortKey, string][] = [
-  ["tier", "Tier (score)"], ["views", "Popularity (views)"], ["viewsweek", "Trending (views this week)"],
+  ["genesys-points", "Genesys points"], ["tier", "Tier (score)"], ["views", "Popularity (views)"], ["viewsweek", "Trending (views this week)"],
   ["related", "Related cards (count)"], ["date", "Release date"], ["deck-date", "Deck file date"], ["name", "Name"],
   ["archetype", "Archetype"], ["archetype-size", "Archetype size (cards)"], ["copies", "Copies"], ["atk", "ATK"],
   ["def", "DEF"], ["level", "Level"], ["deck-count", "Number of decks"], ["kind", "Kind"], ["year", "Release year"], ["id", "ID"],
@@ -91,7 +91,10 @@ const Tile = memo(function Tile({ card: c, copies, display: d, onOpen, genesys }
   return (
     <button type="button" className="lib-tile" onClick={() => onOpen(c)} {...previewHandlers(c)}>
       {d.img && <CardImage card={c} />}
-      <b className="t-name">{c.name}{genesys && points !== null && points > 0 ? ` · ${points === 1 ? "1pt" : `${points} pts`}` : ""}</b>
+      <span className="lib-card-heading">
+        <b className="t-name">{c.name}</b>
+        {genesys && points !== null && points > 0 && <span className="lib-point-badge" title="Genesys points per copy">{points === 1 ? "1pt" : `${points} pts`}</span>}
+      </span>
       {d.tier && <small className={`tier-badge tier-${c.tier}`}>{c.tier ? `Tier ${c.tier}${c.tier_src === "yours" ? "" : " (est.)"}` : " "}</small>}
       {d.kind && <small>{[c.kind, c.attribute, lv].filter(Boolean).join(" · ") || " "}</small>}
       {d.stat && <small>{c.atk !== null ? `ATK ${c.atk}` : ""}{c.defense !== null ? ` / DEF ${c.defense}` : ""}{c.atk === null && c.defense === null ? " " : ""}</small>}
@@ -301,7 +304,7 @@ export function LibraryPage() {
   const heightOf = useCallback((i: number) => (rows[i].type === "head" ? HEAD_H : rowH), [rows, rowH]);
 
   const openCard = useCallback((c: LibraryCard) => setOpen(c), []);
-  const pointColumn: (typeof LIST_COLS)[number] = { key: "points", label: "Points", w: 64, get: (c: LibraryCard) => { const points = genesysPoints(c); return points !== null && points > 0 ? points : ""; } };
+  const pointColumn: (typeof LIST_COLS)[number] = { key: "points", label: "Points", w: 80, get: (c: LibraryCard) => { const points = genesysPoints(c); return points !== null && points > 0 ? points : ""; } };
   const listCols = [...(format === "genesys" ? [pointColumn] : []), ...LIST_COLS].filter((c) => !c.show || prefs.display[c.show]);
   const listTemplate = listCols.map((c) => `${c.w}px`).join(" ");
   const listWidth = listCols.reduce((s, c) => s + c.w, 0);
@@ -326,12 +329,13 @@ export function LibraryPage() {
       );
     }
     const c = r.cards[0];
+    const points = genesysPoints(c);
     return (
       <div className="lib-list-row" role="row" tabIndex={0} style={{ gridTemplateColumns: listTemplate, width: listWidth }}
         onClick={() => openCard(c)} onKeyDown={(e) => { if (e.key === "Enter") openCard(c); }} {...previewHandlers(c)}>
         {listCols.map((col) => (
           <span key={col.key} role="cell" className={col.key === "tier" ? `tier-badge tier-${c.tier}` : col.key === "rel" ? `support support-${c.rel_status}` : undefined}>
-            {String(col.get(c, copies(c)))}
+            {col.key === "points" && points !== null && points > 0 ? <span className="lib-point-badge" title="Genesys points per copy">{points === 1 ? "1pt" : `${points} pts`}</span> : String(col.get(c, copies(c)))}
           </span>
         ))}
       </div>
@@ -416,7 +420,6 @@ export function LibraryPage() {
   return (
     <section className="library">
       {loading && <div role="status">Loading card data… {loading.done.toLocaleString()} / {loading.total.toLocaleString()} ids <progress max={loading.total} value={loading.done} /></div>}
-      <FormatSelector format={format} onChange={setFormat} />
       <div className="lib-head">
         <h1>Library <span className="muted lib-sub">· {library.length.toLocaleString()} cards from {decks.length} deck{decks.length === 1 ? "" : "s"}</span></h1>
         <details className="lib-menu">
@@ -481,10 +484,13 @@ export function LibraryPage() {
             </select>
           </div>
           <div className="row lib-chips-row">
-            <select value={filters.tagMatch} onChange={(e) => setF("tagMatch", e.target.value as "all" | "any")} aria-label="Tag match mode">
-              <option value="all">tags: match all</option>
-              <option value="any">tags: match any</option>
-            </select>
+            <div className="lib-tag-controls">
+              <FormatSelector format={format} onChange={setFormat} />
+              <select value={filters.tagMatch} onChange={(e) => setF("tagMatch", e.target.value as "all" | "any")} aria-label="Tag match mode">
+                <option value="all">tags: match all</option>
+                <option value="any">tags: match any</option>
+              </select>
+            </div>
             <div className="lib-chips">
               {options.tags.map(([t, n]) => {
                 const st = filters.tagState[t];

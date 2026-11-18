@@ -183,6 +183,16 @@ describe("filters, sort and groups", () => {
     expect(sortCards(cards, [{ key: "name" }]).map((c) => c.name)).toEqual(["alpha", "Bravo", "Charlie", "Delta"]);
     expect(() => parseMultiSort("nope")).toThrow();
   });
+  it("sorts Genesys points numerically, keeps unknowns last, and supports tie breakers", () => {
+    const cards = lib([
+      card(1, "Ash Blossom & Joyous Spring"),
+      card(2, "Blue-Eyes White Dragon"),
+      card(3, "Baronne de Fleur"),
+      card(4, "Another zero-point card"),
+    ], [deck("Points", [1, 2, 3, 4, 999])]);
+    expect(sortCards(cards, parseMultiSort("genesys-points:asc,name:asc")).map((c) => c.id)).toEqual([4, 2, 1, 3, 999]);
+    expect(sortCards(cards, parseMultiSort("genesys-points:desc,name:asc")).map((c) => c.id)).toEqual([3, 1, 4, 2, 999]);
+  });
   it("filters like apply_filters", () => {
     const ids = (f: Parameters<typeof applyFilters>[1]) => applyFilters(cards, f).map((c) => c.id).sort();
     expect(ids({ query: "HERO", text: true })).toEqual([1, 2]);

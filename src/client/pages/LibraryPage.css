@@ -32,6 +32,10 @@
 .library input.num { width: 84px; }
 .sort-pair { display: inline-flex; gap: 2px; }
 .lib-chips-row { align-items: flex-start; }
+.lib-tag-controls { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.lib-filters .lib-tag-controls > select { flex: 0 0 auto; }
+.lib-tag-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.lib-tag-controls label select { flex: 1; min-width: 0; }
 .lib-chips { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; max-height: 96px; overflow-y: auto; }
 .chip { padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--surface); }
 .chip .chip-n { color: var(--muted); }
@@ -55,6 +59,7 @@
 /* results */
 .lib-results { position: relative; }
 .lib-probe { position: absolute; visibility: hidden; pointer-events: none; left: 0; top: 0; }
+.lib-probe .lib-tile { width: 100%; }
 .lib-grid-row { display: grid; align-items: start; }
 .lib-tile {
   display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px; text-align: left;
@@ -63,7 +68,13 @@
 .lib-tile:hover, .lib-tile:focus-visible { border-color: var(--accent); outline: none; }
 .lib-tile .card-img { margin-bottom: 4px; }
 .lib-tile b, .lib-tile small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lib-tile .t-name { font-size: 13px; }
+.lib-card-heading { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 26px; }
+.lib-tile .t-name { font-size: 13px; flex: 1; min-width: 0; }
+.lib-point-badge, .lib-list-row .lib-point-badge {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center;
+  padding: 3px 6px; border-radius: 5px; background: var(--accent); color: var(--accent-fg);
+  font-size: 12px; font-weight: 800; line-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
 .lib-tile small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .lib-tile small.tier-badge.tier-S { color: var(--tier-s); }
 .lib-tile small.tier-badge.tier-A { color: var(--tier-a); }
@@ -96,6 +107,7 @@
 
   .lib-filters select { flex: 1 1 140px; min-width: 0; }
   .lib-filters.open { padding-right: 4px; }
+  .lib-tag-controls { flex: 1 1 100%; }
   .lib-chips { flex: 1 1 100%; max-height: 120px; }
   .lib-filters input[type="date"] { flex: 1 1 130px; min-width: 0; }
   .sort-pair { flex: 1 1 100%; }
