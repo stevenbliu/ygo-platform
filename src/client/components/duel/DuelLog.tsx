@@ -74,8 +74,14 @@ export function DuelLog({ log, names, you, onHover, onZoom }: {
   useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    if (atBottom.current) { el.scrollTop = el.scrollHeight; setMissed(0); }
-    else setMissed((n) => n + Math.max(0, log.length - firstNew));
+    if (atBottom.current) {
+      // stick to the bottom on the next frame: reading scrollHeight here, mid-render, forced a layout of the
+      // whole duel page on every new log line (a stutter while effects animate)
+      const f = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+      setMissed(0);
+      return () => cancelAnimationFrame(f);
+    }
+    setMissed((n) => n + Math.max(0, log.length - firstNew));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [log.length, folded, tall]);
   const onScroll = () => {

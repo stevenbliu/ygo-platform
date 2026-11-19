@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cardImage } from "../../api.ts";
 import type {
   EngineCardRef, EngineEffectRef, EnginePlace, EnginePrompt, EngineResponse, EngineResponseBody,
@@ -19,7 +19,14 @@ export interface EnginePromptPanelProps {
   cardName?: (code: number) => string | undefined;
   /** Error text from the server's last `{ t: "error" }`, shown under the prompt. */
   error?: string | null;
+  /** Hovering a card shows the page's big preview. */
+  onHover?(code: number | null): void;
+  /** A card's details under its name (Level, Tuner, Type, ATK / DEF). */
+  info?(code: number): ReactNode;
 }
+
+/** What the card rows need from the page (hover preview, details), without threading it through every row. */
+const CardRowCtx = createContext<Pick<EnginePromptPanelProps, "onHover" | "info">>({});
 
 const ZONE_LABEL: Record<string, string> = {
   hand: "Hand", deck: "Deck", monster: "Monster Zone", spelltrap: "S/T Zone", gy: "GY", banished: "Banished",
@@ -29,7 +36,11 @@ const POSITION_LABEL: Record<Position, string> = {
   atk: "Face-up Attack", def: "Face-up Defense", faceDownDef: "Face-down Defense", faceDown: "Face-down Attack",
 };
 
-export function EnginePromptPanel({ prompt, onRespond, cardName, error }: EnginePromptPanelProps) {
+export function EnginePromptPanel(props: EnginePromptPanelProps) {
+  return <CardRowCtx.Provider value={{ onHover: props.onHover, info: props.info }}><PromptPanel {...props} /></CardRowCtx.Provider>;
+}
+
+function PromptPanel({ prompt, onRespond, cardName, error }: EnginePromptPanelProps) {
   const send = (r: EngineResponseBody) => onRespond({ ...r, promptId: prompt.id } as EngineResponse);
   const name = (c: { code: number }) => (c.code ? cardName?.(c.code) ?? `#${c.code}` : "Face-down card");
   const where = (c: EngineCardRef) =>
@@ -184,15 +195,18 @@ function CardRow({ label, cards, name, where, onPick, desc, badge, selected }: {
   label?: string; cards: (EngineCardRef | EngineEffectRef)[]; name: (c: { code: number }) => string; where: (c: EngineCardRef) => string;
   onPick?: (index: number) => void; desc?: boolean; badge?: (c: EngineCardRef) => string | undefined; selected?: Set<number>;
 }) {
+  const { onHover, info } = useContext(CardRowCtx);
   return (
     <div className="engine-prompt__row">
       {label && <div className="engine-prompt__label">{label}</div>}
       <div className="engine-prompt__cards">
         {cards.map((c, i) => (
           <button key={i} type="button" disabled={!onPick} title={`${name(c)} — ${where(c)}${"desc" in c ? `\n${c.desc}` : ""}`}
-            className={`engine-card${selected?.has(i) ? " is-selected" : ""}`} onClick={() => onPick?.(i)}>
+            className={`engine-card${selected?.has(i) ? " is-selected" : ""}`} onClick={() => onPick?.(i)}
+            onMouseEnter={() => onHover?.(c.code || null)} onMouseLeave={() => onHover?.(null)} onFocus={() => onHover?.(c.code || null)} onBlur={() => onHover?.(null)}>
             {c.code ? <img src={cardImage(c.code)} alt="" loading="lazy" /> : <span className="engine-card__back" />}
             <span className="engine-card__name">{name(c)}</span>
+            {c.code > 0 && info?.(c.code)}
             {desc && "desc" in c && <span className="engine-card__desc">{c.desc}</span>}
             {badge?.(c) && <span className="engine-card__badge">{badge(c)}</span>}
           </button>

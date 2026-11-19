@@ -261,6 +261,55 @@ export function arcTo(layer: HTMLElement, run: Run, from: DOMRect, to: DOMRect, 
   setTimeout(() => g.remove(), delay + 1500);
 }
 
+/** Drawing a card: it slides off the top of the Deck, lifts, arcs over to its place in the hand and settles there.
+ *  Your own draws turn face-up on the way (a 3D flip) and catch a glint of light; the opponent's stay face-down.
+ *  The real hand card stays hidden until the flight lands (the animator fades it in). */
+export const DRAW_MS = 700;
+/** `sleeve`: the Deck's own card back (the player's sleeve), copied onto the card's back face. */
+export function draw(layer: HTMLElement, run: Run, from: DOMRect, to: DOMRect, code: number, faceUp: boolean, delay: number, sleeve?: Element | null) {
+  if (!from.width || !from.height) return;
+  // card proportions, centred on the Deck (a tilted pile's on-screen box is squarer than a card)
+  const w = Math.min(from.width, from.height * (59 / 86)), h = w * (86 / 59);
+  const left = from.left + (from.width - w) / 2, top = from.top + (from.height - h) / 2;
+  const g = document.createElement("div");
+  g.className = "fx-draw";
+  Object.assign(g.style, { left: `${left}px`, top: `${top}px`, width: `${w}px`, height: `${h}px` });
+  const inner = document.createElement("div");
+  inner.className = "fx-draw-inner";
+  const box = { left: 0, top: 0, width: w, height: h };
+  const backFace = cardEl(0, false, box, "fx-draw-face fx-draw-back");
+  const plain = backFace.querySelector(".duel-card-back");
+  if (sleeve && plain) plain.replaceWith(sleeve.cloneNode(true));
+  inner.appendChild(backFace);
+  if (faceUp) {
+    const front = cardEl(code, true, box, "fx-draw-face fx-draw-front");
+    const glint = document.createElement("i");
+    glint.className = "fx-draw-glint";
+    front.appendChild(glint);
+    inner.appendChild(front);
+    run(glint, [{ transform: "translateX(-120%) skewX(-18deg)", opacity: 0 }, { offset: 0.6, transform: "translateX(-120%) skewX(-18deg)", opacity: 0 },
+      { offset: 0.7, opacity: 1 }, { transform: "translateX(160%) skewX(-18deg)", opacity: 0 }], { duration: DRAW_MS, delay, easing: "ease-out", fill: "both" });
+  }
+  g.appendChild(inner);
+  layer.appendChild(g);
+  const dx = to.left + to.width / 2 - (left + w / 2), dy = to.top + to.height / 2 - (top + h / 2);
+  const s = Math.max(0.5, Math.min(2.2, Math.min(to.width, to.height * (59 / 86)) / w));
+  const lift = -h * 0.5, tilt = dx > 0 ? 7 : -7;
+  const a = run(g, [
+    { transform: "none", opacity: 1 },
+    { offset: 0.2, transform: `translate(${dx * 0.04}px, ${lift * 0.8}px) scale(1.12) rotate(${-tilt / 2}deg)`, opacity: 1 },
+    { offset: 0.62, transform: `translate(${dx * 0.68}px, ${dy * 0.68 + lift}px) scale(${(1 + s) / 2 * 1.12}) rotate(${tilt}deg)`, opacity: 1 },
+    { offset: 0.88, transform: `translate(${dx}px, ${dy - h * 0.06}px) scale(${s * 1.04}) rotate(0deg)`, opacity: 1 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 1 },
+  ], { duration: DRAW_MS, delay, easing: "cubic-bezier(.3,.55,.25,1)", fill: "both" });
+  if (faceUp) run(inner, [{ transform: "rotateY(0deg)" }, { offset: 0.22, transform: "rotateY(0deg)" }, { offset: 0.62, transform: "rotateY(180deg)" }, { transform: "rotateY(180deg)" }],
+    { duration: DRAW_MS, delay, easing: "ease-in-out", fill: "both" });
+  const done = () => g.remove();
+  a.onfinish = done;
+  a.oncancel = done;
+  setTimeout(done, DRAW_MS + delay + 1500);
+}
+
 /** Excavate: the top cards lift off the Deck, fan out face-up above it, hold, then sink back. */
 export function fan(layer: HTMLElement, run: Run, deck: DOMRect, codes: number[], delay: number) {
   const n = Math.min(codes.length, 6);

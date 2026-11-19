@@ -12,6 +12,7 @@ import { boardCodes, getCard } from "../useDuel.ts";
 import { cardImage } from "../../../api.ts";
 import { duelSettings } from "../duelSettings.ts";
 import { unlockAudioOnGesture } from "./sfx.ts";
+import { BEAT_MS } from "../../../../shared/pacing.ts";
 
 /** The splash shows a card's full image / art the moment it's summoned or activated: fetch them ahead, for
  *  every card the viewer can see (hands, field, Extra Deck and piles), once each, in idle time. */
@@ -42,6 +43,8 @@ export function useBoardAnimations() {
 
   const beforeState = useCallback((prev: BoardState | null, next: BoardState, events: EngineEvent[] | null) => {
     preloadSplashArt(next);
+    // a new turn / phase: its banner gets its beat even when nothing else moves
+    const floor = !prev ? 0 : next.turn !== prev.turn ? BEAT_MS.turn : next.phase !== prev.phase ? BEAT_MS.phase : 0;
     if (events?.length) {
       const intents = prev ? engineIntents(events, prev, next, chain.current, (code) => effectKind(getCard(code))) : [];
       if (!prev) {
@@ -54,14 +57,14 @@ export function useBoardAnimations() {
       const badges = new Map<string, string>();
       for (const [link, uid] of [...chain.current.uid].sort((a, b) => a[0] - b[0])) badges.set(uid, badges.has(uid) ? `${badges.get(uid)}·${link}` : String(link));
       setChainBadges(badges);
-      if (prev) animator.current!.capture(intents);
+      if (prev) animator.current!.capture(intents);   // turn / phase beats are intents here
       return;
     }
     if (!prev) return;
     if (!events && !engineMode.current) animator.current!.capture(manualIntents(prev, next, (code) => {
       const c = getCard(code);
       return c && (c.category === "Spell" || c.category === "Trap") ? effectKind(c) : null;
-    }), true);
+    }), true, floor);
   }, []);
 
   const rootRef = useCallback((el: HTMLElement | null) => { animator.current!.root = el; }, []);

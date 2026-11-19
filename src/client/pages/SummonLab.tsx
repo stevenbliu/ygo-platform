@@ -1,3 +1,4 @@
+import { RARITIES, RARITY_LABEL } from "../../shared/rarity.ts";
 // /dev/summons (unlinked): every summon and activation animation on a small mock field, one click each,
 // to judge them by eye (the same functions the duel uses, anim/summonFx.ts).
 import { useEffect, useRef, useState } from "react";
@@ -58,6 +59,7 @@ export default function SummonLab() {
   const [big, setBig] = useState<"auto" | "on" | "off">("auto");
   const [splashOn, setSplashOn] = useState(true);
   const [short, setShort] = useState(false);
+  const [rarity, setRarity] = useState<string>("common");
   const pending = useRef<(() => void) | null>(null);
   // a chain link resolving on the middle monster (its resolve animation + sound), and the turn / phase banner
   const [resolving, setResolving] = useState<{ style: ResolveStyle; key: number } | null>(null);
@@ -87,7 +89,7 @@ export default function SummonLab() {
       if (!z || !layer.current) return;
       const c = card(code);
       const heavy = big === "on" || (big === "auto" && isBig(c));
-      const d = splashOn && kind !== "set" && code ? splash(layer.current, run, { code, name: c?.name ?? "", kicker: SUMMON_LABEL[kind], tone: toneOf(kind), at: z.getBoundingClientRect(), center: mid(), mine: side === "left", style: sumStyle, big: heavy, short }, 0) : 0;
+      const d = splashOn && kind !== "set" && code ? splash(layer.current, run, { code, name: c?.name ?? "", kicker: SUMMON_LABEL[kind], tone: toneOf(kind), at: z.getBoundingClientRect(), center: mid(), mine: side === "left", style: sumStyle, big: heavy, short, rarity }, 0) : 0;
       summon(layer.current, run, z.getBoundingClientRect(), kind, d, { card: z.querySelector<HTMLElement>(".lab-card"), stage: stage.current, big: heavy, markers: c?.linkmarkers });
     };
   };
@@ -98,7 +100,7 @@ export default function SummonLab() {
       const z = zone(monster ? "m" : "s", at);
       if (!z || !layer.current) return;
       const c = card(code);
-      const d = splashOn && !short ? splash(layer.current, run, { code, name: c?.name ?? "", kicker: link > 1 ? `Chain ${link} · ${ACTIVATE_LABEL[kind]}` : ACTIVATE_LABEL[kind], tone: toneOf(kind, c), at: z.getBoundingClientRect(), center: mid(), mine: side === "left", style: actStyle, short: link > 1 }, delay) : delay;
+      const d = splashOn && !short ? splash(layer.current, run, { code, name: c?.name ?? "", kicker: link > 1 ? `Chain ${link} · ${ACTIVATE_LABEL[kind]}` : ACTIVATE_LABEL[kind], tone: toneOf(kind, c), at: z.getBoundingClientRect(), center: mid(), mine: side === "left", style: actStyle, short: link > 1, rarity }, delay) : delay;
       activate(layer.current, run, z.getBoundingClientRect(), kind, d, { card: z.querySelector<HTMLElement>(".lab-card"), tone: toneOf(kind, c) });
       chainLine(layer.current, run, prev?.getBoundingClientRect() ?? null, z.getBoundingClientRect(), link, d);
     };
@@ -114,7 +116,7 @@ export default function SummonLab() {
       let t = 0;
       steps.forEach(([el, prev, kind, code], i) => {
         const cd = card(code);
-        const d = splashOn ? splash(L, run, { code, name: cd?.name ?? "", kicker: i ? `Chain ${i + 1} · ${ACTIVATE_LABEL[kind]}` : ACTIVATE_LABEL[kind], tone: toneOf(kind, cd), at: el.getBoundingClientRect(), center: mid(), mine: (i % 2 ? side !== "left" : side === "left"), style: actStyle, short: i > 0 || short }, t) : t;
+        const d = splashOn ? splash(L, run, { code, name: cd?.name ?? "", kicker: i ? `Chain ${i + 1} · ${ACTIVATE_LABEL[kind]}` : ACTIVATE_LABEL[kind], tone: toneOf(kind, cd), at: el.getBoundingClientRect(), center: mid(), mine: (i % 2 ? side !== "left" : side === "left"), style: actStyle, short: i > 0 || short, rarity }, t) : t;
         activate(L, run, el.getBoundingClientRect(), kind, d, { card: el.querySelector<HTMLElement>(".lab-card"), tone: toneOf(kind, cd) });
         chainLine(L, run, prev?.getBoundingClientRect() ?? null, el.getBoundingClientRect(), i + 1, d);
         t = d + 500;
@@ -152,6 +154,7 @@ export default function SummonLab() {
           <label>Boss weight <select value={big} onChange={(e) => setBig(e.target.value as typeof big)}><option value="auto">Auto (Level 7+, 2500+ ATK)</option><option value="on">Always</option><option value="off">Never</option></select></label>
           <label><input type="checkbox" checked={splashOn} onChange={(e) => setSplashOn(e.target.checked)} /> Art splash</label>
           <label><input type="checkbox" checked={short} onChange={(e) => setShort(e.target.checked)} /> Short splash</label>
+          <label>Rarity <select value={rarity} onChange={(e) => setRarity(e.target.value)}>{RARITIES.map((x) => <option key={x} value={x}>{RARITY_LABEL[x]}</option>)}</select></label>
           <label>Whose <select value={side} onChange={(e) => setSide(e.target.value as "left" | "right")}><option value="left">Yours</option><option value="right">Opponent's</option></select></label>
           <label>Summons as <select value={sumStyle} onChange={(e) => setSumStyle(e.target.value as SplashStyle)}>{SPLASH_STYLES.map((x) => <option key={x} value={x}>{SPLASH_STYLE_LABEL[x]}</option>)}</select></label>
           <label>Activations as <select value={actStyle} onChange={(e) => setActStyle(e.target.value as SplashStyle)}>{SPLASH_STYLES.map((x) => <option key={x} value={x}>{SPLASH_STYLE_LABEL[x]}</option>)}</select></label>

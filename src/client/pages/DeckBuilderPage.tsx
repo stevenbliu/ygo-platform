@@ -1,5 +1,6 @@
 // PHASE 1 owns this page (deck builder for /decks/:deckId).
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import type { Card, Deck, Section } from "../../shared/types.ts";
 import { toYdk } from "../../shared/ydk.ts";
@@ -112,6 +113,9 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
   const [saving, setSaving] = useState(false);
   const [, setVersion] = useState(0);
   const [menu, setMenu] = useState<Menu | null>(null);
+  /** The card menu, measured and kept on screen (it's taller than a short or zoomed window: it scrolls). */
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; maxH: number; pv: { left: number; top: number } | null } | null>(null);
   /** The foil being hovered in the card menu: shown on a big copy of the card beside the menu. */
   const [foilPreview, setFoilPreview] = useState<Rarity | null>(null);
   const [over, setOver] = useState<Section | null>(null);
@@ -149,10 +153,28 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
+    // scrolling the menu itself keeps it open; scrolling the page (it would leave the card behind) closes it
+    const onScroll = (e: Event) => { if (!menuRef.current?.contains(e.target as Node)) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" || e.key === "Tab") close(); };
     window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("keydown", close);
-    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("keydown", close); };
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", onScroll, true); window.removeEventListener("keydown", onKey); window.removeEventListener("resize", close); };
+  }, [menu]);
+  // place the menu where it fits: beside the click, inside the window, the foil preview on whichever side has room
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!menu || !el) { setMenuPos(null); return; }
+    const pad = 8, gap = 12, pvW = 230, pvH = 380;
+    const w = el.offsetWidth, h = el.scrollHeight + 2;
+    const maxH = innerHeight - pad * 2;
+    const left = Math.max(pad, Math.min(menu.x, innerWidth - w - pad));
+    const top = Math.max(pad, Math.min(menu.y, innerHeight - Math.min(h, maxH) - pad));
+    const pvTop = Math.max(pad, Math.min(top, innerHeight - pvH - pad));
+    const pv = left + w + gap + pvW <= innerWidth - pad ? { left: left + w + gap, top: pvTop }
+      : left - gap - pvW >= pad ? { left: left - gap - pvW, top: pvTop } : null;
+    setMenuPos({ left, top, maxH, pv });
   }, [menu]);
 
   const update = useCallback((fn: (d: Deck) => Deck) => setDeck((d) => (d ? fn(d) : d)), []);
@@ -345,26 +367,27 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
         </div>
       </div>
 
-      {menu && deck[menu.section][menu.index] !== undefined && (() => {
+      {menu && deck[menu.section][menu.index] !== undefined && createPortal((() => {
         const c = cardOf(deck[menu.section][menu.index]);
         const extra = isExtraDeckType(c.type);
         const other: Section = menu.section === "side" ? (extra ? "extra" : "main") : "side";
         return (
-          <div className="db-menu" role="menu" style={{ left: Math.min(menu.x, innerWidth - 230), top: Math.min(menu.y, innerHeight - 420) }} onClick={(e) => e.stopPropagation()}>
-            {/* a big copy of the card wearing the hovered foil (or its current one) */}
-            {(() => {
-              const shown = foilPreview ?? rarityOf(deck.rarity, c.id);
-              const left = menu.x > innerWidth - 700;
-              return (
-                <div className={`db-foil-preview ${left ? "is-left" : ""}`} aria-hidden="true">
-                  <span data-foil={shown}>
-                    <img src={cardImage(c.id, "full")} alt="" />
-                    <RarityFoil rarity={shown} type={c.type} code={c.id} />
-                  </span>
-                  <small>{shown === "common" ? "Common" : rarityLabel(shown)}</small>
-                </div>
-              );
-            })()}
+          <>
+          {/* a big copy of the card wearing the hovered foil (or its current one), beside the menu where there's room */}
+          {menuPos?.pv && (() => {
+            const shown = foilPreview ?? rarityOf(deck.rarity, c.id);
+            return (
+              <div className="db-foil-preview" style={{ left: menuPos.pv.left, top: menuPos.pv.top }} aria-hidden="true">
+                <span data-foil={shown}>
+                  <img src={cardImage(c.id, "full")} alt="" />
+                  <RarityFoil rarity={shown} type={c.type} code={c.id} />
+                </span>
+                <small>{shown === "common" ? "Common" : rarityLabel(shown)}</small>
+              </div>
+            );
+          })()}
+          <div className="db-menu" role="menu" ref={menuRef} onClick={(e) => e.stopPropagation()}
+            style={menuPos ? { left: menuPos.left, top: menuPos.top, maxHeight: menuPos.maxH } : { left: menu.x, top: menu.y, visibility: "hidden" }}>
             <div className="db-menu-title">{c.name}</div>
             <button type="button" role="menuitem" onClick={() => { add(c, menu.section); setMenu(null); }}>Add a copy</button>
             <button type="button" role="menuitem" onClick={() => { move(menu.section, menu.index, other); setMenu(null); }}>Move to {other === "side" ? "Side" : other === "extra" ? "Extra" : "Main"} Deck</button>
@@ -410,8 +433,9 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
               })()}
             </div>
           </div>
+          </>
         );
-      })()}
+      })(), document.body)}
       <CardPreviewLayer />
     </section>
   );

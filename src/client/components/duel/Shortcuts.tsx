@@ -97,7 +97,7 @@ export function useKeyboardCursor(enabled: boolean) {
 
 const GROUPS: { title: string; keys: [string, string][] }[] = [
   { title: "Move around", keys: [["← → ↑ ↓", "Move the cursor over cards you can use / pick"], ["Enter", "Click the card under the cursor (actions, pick)"], ["1–4", "That card's action buttons"], ["Z", "Zoom the card"]] },
-  { title: "Decisions", keys: [["1–9", "Chain the 1st, 2nd… option in the dock"], ["Enter", "Confirm a selection"], ["Esc", "Cancel / don't chain / close"], ["Space", "Pass on a chain (or end your turn); during a card splash: skip it"], ["M", "View the board / back to the decision"]] },
+  { title: "Decisions", keys: [["1–9", "Chain the 1st, 2nd… option in the dock"], ["Enter", "Confirm a selection"], ["Esc", "Cancel / don't chain / close"], ["Space", "Pass on a chain (or end your turn); while a summon, effect or phase plays out: skip to the decision"], ["M", "View the board / back to the decision"]] },
   { title: "Turn", keys: [["N", "Next phase"], ["B", "Battle Phase"], ["E", "End turn"]] },
   { title: "Other", keys: [["L", "Duel log and chat"], ["K", "This sheet"], ["?", "How to play"]] },
 ];

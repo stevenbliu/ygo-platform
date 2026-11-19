@@ -56,7 +56,13 @@ export interface DuelSocketHooks {
   /** Called synchronously before a new board is stored (the DOM still shows `prev`), with the
    *  engine events that led to it (rules-enforced mode; null in manual mode). For animations. */
   beforeState?(prev: BoardState | null, next: BoardState, events: EngineEvent[] | null): void;
+  /** Resolves when the board update just stored has played out (animator.settle). Until then the next
+   *  update, prompt, toast and session change wait their turn: each moment gets its beat (shared/pacing.ts). */
+  settle?(): Promise<void>;
 }
+
+/** Messages that play out in order on the board (the rest, like chat, apply at once). */
+const FLOW = new Set<ServerMsg["t"]>(["state", "engineEvents", "prompt", "event", "session"]);
 
 export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
   const hooksRef = useRef(hooks);
@@ -86,6 +92,22 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     // heartbeat: the room answers "ping" with "pong" without waking up, and drops silent sockets
     const ping = setInterval(() => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send("ping"); }, 25_000);
+    // updates play out one at a time: after a board update, the next message waits until it has settled
+    let handle: (msg: ServerMsg) => void = () => undefined;
+    const inbox: ServerMsg[] = [];
+    let draining = false;
+    const drain = async () => {
+      if (draining) return;
+      draining = true;
+      try {
+        while (inbox.length && !stopped) {
+          const m = inbox.shift()!;
+          const hadBoard = !!boardRef.current;
+          handle(m);
+          if (m.t === "state" && hadBoard && hooksRef.current?.settle) await hooksRef.current.settle();
+        }
+      } finally { draining = false; }
+    };
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
       const ws = new WebSocket(`${proto}://${location.host}/ws/room/${encodeURIComponent(roomId)}`);
@@ -99,6 +121,9 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
       ws.onmessage = (e) => {
         let msg: ServerMsg;
         try { msg = JSON.parse(e.data); } catch { return; }
+        if (FLOW.has(msg.t)) { inbox.push(msg); void drain(); } else handle(msg);
+      };
+      handle = (msg: ServerMsg) => {
         switch (msg.t) {
           case "room": setConn((c) => ({ ...c, room: msg.room, you: msg.you })); break;
           case "session":
@@ -152,6 +177,7 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
       };
       ws.onclose = (e) => {
         if (wsRef.current === ws) wsRef.current = null;
+        inbox.length = 0;   // the server sends the whole state again on reconnect
         if (stopped) return;
         if (e.code === 4404) { setConn((c) => ({ ...c, status: "gone" })); return; }
         setConn((c) => ({ ...c, status: "closed" }));

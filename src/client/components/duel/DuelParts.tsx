@@ -32,7 +32,7 @@ import { duelSettings, useDuelSettings } from "./duelSettings.ts";
 import { SPEEDS, setAutopilot, setSpeed, useAutopilot, type Speed } from "./autopilot.ts";
 import { botResponse } from "../../../worker/duel/engine/bot.ts";
 import { demoDeck } from "../../../shared/starterDecks.ts";
-import { autoAnswer, type AutoPassMode } from "../../../shared/autoPass.ts";
+import { AUTO_PASS_LABEL, autoAnswer, type AutoPassMode } from "../../../shared/autoPass.ts";
 import { nothingLeftToDo } from "../../../shared/turnFlow.ts";
 import { ShortcutSheet, ShortcutsButton, useKeyboardCursor } from "./Shortcuts.tsx";
 import { RarityContext, rarityLookup, useFoilPointer } from "../cards/Rarity.tsx";
@@ -72,12 +72,13 @@ export function PlayerBar({ board, player, you, onLp, onLpChange, connected, tim
           <span title="Cards in hand">✋ {pb.hand.length}</span>
           <span title="Cards in Deck">🂠 {pb.deck.length}</span>
           {turn && <span className="duel-chip is-turn">Turn {board.turn}</span>}
-          <span className="duel-timer-slot">{timer && <TurnTimer timer={timer} seat={player} label={player === you ? "Your time" : `${pb.name}'s time`} />}</span>
         </span>
       </span>
       <button className={`duel-lp ${pb.lp <= 2000 ? "is-low" : ""}`} onClick={onLp ? () => onLp(player) : undefined} disabled={you === null || !onLp} title={onLp ? "Change LP" : "Life Points"}>
         <span>LP</span> <AnimatedLp key={duelNo} value={pb.lp} onChange={lpChanged} />
       </button>
+      {/* their clock, right beside the LP (outside the stats line, which fades back in calm mode) */}
+      {timer && <span className="duel-timer-slot"><TurnTimer timer={timer} seat={player} label={player === you ? "Your time" : `${pb.name}'s time`} /></span>}
     </div>
   );
 }
@@ -132,7 +133,11 @@ export function decidingText(d: { seat: 0 | 1; kind: string; hint?: string } | u
 export function TurnSign({ board, you, names, acting, waiting, timer }: { board: BoardState; you: Seat | null; names: [string, string]; acting: boolean; waiting: string | null; timer?: TurnClock }) {
   const mine = board.turnPlayer === you;
   const theirMove = acting && !mine;
-  const cls = theirMove ? "is-acting" : mine ? (acting ? "is-mine" : "is-mine is-waiting") : "is-theirs";
+  // your turn, but the opponent is the one deciding (a response, a target): the sign names them
+  // (timed duels go by whose clock runs, so the engine thinking between your moves doesn't flip it)
+  const theirsNow = mine && !acting && !!waiting && (!timer || (timer.running !== null && timer.running !== you));
+  const cls = theirMove ? "is-acting" : theirsNow ? "is-theirs" : mine ? (acting ? "is-mine" : "is-mine is-waiting") : "is-theirs";
+  const text = theirMove ? "Your move" : theirsNow ? `${waiting}'s turn` : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`;
   return (
     <div className="duel-turnrow">
       {/* the clock of whoever the duel waits on: it passes back and forth with the decisions */}
@@ -143,9 +148,8 @@ export function TurnSign({ board, you, names, acting, waiting, timer }: { board:
       <div className={`duel-turnsign ${cls}`} role="status" aria-live="polite">
         {/* timed duels: the letters are the seconds bar of whoever is deciding */}
         {timer
-          ? <SecondsText timer={timer} seat={(timer.running ?? board.turnPlayer) as 0 | 1}>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</SecondsText>
-          : <b>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</b>}
-        {waiting && mine && <small>waiting for {waiting}</small>}
+          ? <SecondsText timer={timer} seat={(timer.running ?? board.turnPlayer) as 0 | 1}>{text}</SecondsText>
+          : <b>{text}</b>}
       </div>
     </div>
   );
@@ -234,5 +238,23 @@ export function LpDialog({ board, initial, you, onClose, act }: { board: NonNull
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Chain prompts, one click away beside Next / End turn: when the duel stops to ask "chain a card?" (⚙ has the
+ *  same setting). */
+export function ChainModeSwitch({ mode, set }: { mode: AutoPassMode; set(m: AutoPassMode): void }) {
+  const opts: [AutoPassMode, string, string][] = [
+    ["ask", "Ask", "Always ask whenever you could chain"],
+    ["smart", "Smart", "Only stop when your opponent does something (your monsters' effects always ask)"],
+    ["never", "Mine", "Only stop for your monsters' effects (triggers, hand traps)"],
+  ];
+  return (
+    <div className="duel-chainmode" role="radiogroup" aria-label="Chain prompts">
+      <span className="duel-chainmode-label">Chains</span>
+      {opts.map(([m, label, hint]) => (
+        <button key={m} role="radio" aria-checked={mode === m} className={mode === m ? "is-on" : ""} title={`${AUTO_PASS_LABEL[m]}: ${hint}`} onClick={() => set(m)}>{label}</button>
+      ))}
+    </div>
   );
 }

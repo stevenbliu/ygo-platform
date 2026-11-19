@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, 
 import type { BoardState, CardInstance, Position } from "../../../shared/duel.ts";
 import type { EngineCardRef, EnginePlace, EnginePrompt, EngineResponse, EngineResponseBody, Seat } from "../../../shared/enginePrompts.ts";
 import type { BoardMarks, ZoneRef } from "../duel/Board.tsx";
-import { CardBack, CardFace, CardView } from "../duel/CardView.tsx";
+import { CardBack, CardCaption, CardFace, CardView, type CanKind } from "../duel/CardView.tsx";
 import type { MenuItem } from "../duel/menus.ts";
 import { Modal } from "../duel/Overlays.tsx";
 import { engineFirst, indexBoard, placeZone, refUid, visibleCode, zoneKey } from "./boardRefs.ts";
@@ -176,6 +176,16 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     if (o.source && index.get(o.source.uid)?.card.code === o.source.code) m.source = o.source.uid;
     if (!mine) return m;
     if (mine.kind === "idle" || mine.kind === "battle") for (const uid of actions.keys()) m.actionable.add(uid);
+    if (mine.kind === "idle" || mine.kind === "battle") {
+      // what each card can do now (its glow and tag), and each pile's best (the Extra Deck: Summon)
+      m.can = new Map();
+      for (const [uid, acts] of actions) { const k = canOf(acts); if (k) m.can.set(uid, k); }
+      for (const [key, list] of layout.piles) {
+        const kinds = list.map((r) => m.can!.get(refUid(r))).filter(Boolean) as CanKind[];
+        const best = CAN_ORDER.find((k) => kinds.includes(k));
+        if (best) m.can.set(key, best);
+      }
+    }
     if (mine.kind === "battle" && settings.dragAttack) m.drag = new Set(mine.attacks.map((r) => refUid(r)));
     if (mine.kind === "selectChain") for (const uid of actions.keys()) m.selectable.add(uid);
     if (mine.kind === "effectYesNo") m.selectable.add(refUid(mine.card));
@@ -194,7 +204,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
   const isDecision = !!mine && isDecisionKind(mine);
   const peeking = isDecision && (minimized || (!!lastPile && !pile));
   const peek = () => { setPile(null); setMinimized(true); };
-  const restore = () => { setMinimized(false); if (lastPile && (lastPile === ALL_PILES || layout.piles.has(lastPile))) setPile(lastPile); };
+  const restore = () => { setMinimized(false); if (lastPile && (lastPile === ALL_PILES || layout.piles.has(lastPile.replace(CAN_ONLY, "")))) setPile(lastPile); };
 
   // ---------- clicks ----------
 
@@ -247,6 +257,19 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     point.current = { x: e.clientX, y: e.clientY };
     const k = zoneKey(at);
     if (mine?.kind === "selectPlace" && placeMap.has(k)) { choosePlace(placeMap.get(k)!); return true; }
+    if (layout.piles.has(k) && (mine?.kind === "idle" || mine?.kind === "battle") && PILE_ZONES.has(at.zone)) {
+      // a pile with something to do (the Extra Deck: Special Summon): do it, or look through the whole pile
+      const n = layout.piles.get(k)!.length;
+      const kind = marks.can?.get(k);
+      const verb = at.zone === "extra" || kind === "summon" ? "Special Summon" : kind === "attack" ? "Attack" : "Activate";
+      const total = board.players[at.player][at.zone as "deck" | "gy" | "banished" | "extra"].length;
+      const publicPile = at.zone !== "deck";
+      o.openMenu({ x: e.clientX, y: e.clientY, title: PILE_TITLE[at.zone as keyof typeof PILE_TITLE] ?? "Pile", items: [
+        { label: `${verb}… (${n} ${n === 1 ? "card" : "cards"})`, run: () => { setPile(`${k}${CAN_ONLY}`); setLastPile(`${k}${CAN_ONLY}`); } },
+        ...(publicPile ? [{ label: `View all (${total})`, run: () => { setPile(k); setLastPile(k); } }] : []),
+      ] });
+      return true;
+    }
     if (layout.piles.has(k)) { setPile(k); setLastPile(k); return true; }
     // a pile click opens its viewer (GY / banished / Extra); nothing else on the board does anything by itself
     return !(at.zone === "gy" || at.zone === "banished" || at.zone === "extra");
@@ -327,7 +350,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
 
   let overlay: ReactNode = null;
   if (mine) {
-    const panel = <EnginePromptPanel prompt={mine} onRespond={o.respond} cardName={o.cardName} />;
+    const panel = <EnginePromptPanel prompt={mine} onRespond={o.respond} cardName={o.cardName} onHover={o.onHover} info={(code) => <CardCaption code={code} />} />;
     if (!onBoardKind || showList) {
       overlay = (
         <div className="duel-engine-dialog" role="dialog" aria-label="Rules engine choice">
@@ -348,7 +371,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
       overlay = (
         <>
           {overlay}
-          <Modal title={pv.title} onClose={() => setPile(null)} wide>
+          <Modal title={pv.title} onClose={() => setPile(null)} wide docked>
             <p className="muted duel-engine-pilehint">{mine.hint ?? title(mine)}</p>
             {pv.sections.map((sec) => (
               <div key={sec.label || "pile"} className="duel-picker-section">
@@ -357,8 +380,11 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
                   {sec.cards.map(({ card, at }) => {
                     const mark = marks.picked.has(card.uid) ? "picked" : marks.selectable.has(card.uid) ? "selectable" : marks.actionable.has(card.uid) ? "actionable" : undefined;
                     return (
-                      <CardView key={card.uid} card={{ ...card, faceUp: card.faceUp || card.code > 0 }} mark={mark} badge={marks.badges.get(card.uid)}
-                        onHover={o.onHover} onClick={(e) => onCard(card, at, e)} />
+                      <div key={card.uid} className="duel-viewer-cell">
+                        <CardView card={{ ...card, faceUp: card.faceUp || card.code > 0 }} mark={mark} can={marks.can?.get(card.uid)} badge={marks.badges.get(card.uid)}
+                          onHover={o.onHover} onClick={(e) => onCard(card, at, e)} />
+                        <CardCaption code={card.code} name />
+                      </div>
                     );
                   })}
                 </div>
@@ -386,8 +412,18 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
       const n = sections.reduce((t, s) => t + s.cards.length, 0);
       return { title: `${n} to choose from`, sections };
     }
+    if (key.endsWith(CAN_ONLY)) {
+      // only the cards you can use now
+      const v = onePile(key.slice(0, -CAN_ONLY.length));
+      if (!v) return null;
+      const cards = v.cards.filter(({ card }) => marks.actionable.has(card.uid) || marks.selectable.has(card.uid));
+      const verb = key.includes("extra") ? "Special Summon" : "Use";
+      return { title: `${verb}: ${cards.length} ${cards.length === 1 ? "card" : "cards"}`, sections: [{ label: "", cards }] };
+    }
     const v = onePile(key);
-    return v && { title: v.title, sections: [{ label: "", cards: v.cards }] };
+    // the Main / Battle Phase "View all": the whole pile, the usable cards glowing
+    const browsing = mine?.kind === "idle" || mine?.kind === "battle";
+    return v && { title: browsing ? v.title.replace(/: \d+ to choose from$/, `: ${v.cards.length}`) : v.title, sections: [{ label: "", cards: v.cards }] };
   }
   function onePile(key: string): { title: string; cards: { card: CardInstance; at: ZoneRef }[] } | null {
     const list = layout.piles.get(key);
@@ -511,4 +547,21 @@ function PositionChooser({ prompt: p, at, name, you, onPick }: {
       </div>
     </div>
   );
+}
+
+/** A pile key suffix: the picker shows only the cards you can use now. */
+const CAN_ONLY = "|can";
+const PILE_ZONES = new Set(["deck", "gy", "banished", "extra"]);
+/** Strongest first: a card that can be summoned and Set glows as summonable. */
+const CAN_ORDER: CanKind[] = ["summon", "activate", "attack", "set"];
+function canOf(acts: CardAction[]): CanKind | null {
+  const kinds = new Set<CanKind>();
+  for (const a of acts) {
+    const r = a.response as { action?: string };
+    if (r.action === "summon" || r.action === "specialSummon" || /Flip Summon/.test(a.label)) kinds.add("summon");
+    else if (r.action === "activate") kinds.add("activate");
+    else if (r.action === "attack") kinds.add("attack");
+    else if (r.action === "monsterSet" || r.action === "spellSet") kinds.add("set");
+  }
+  return CAN_ORDER.find((k) => kinds.has(k)) ?? null;
 }

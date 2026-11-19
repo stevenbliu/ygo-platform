@@ -14,6 +14,7 @@ import { botResponse } from "./engine/bot.ts";
 import { BadResponse, restoreRoomEngine, startRoomEngine, type RoomEngineSession, type RoomEngineUpdate } from "./engine/roomHook.ts";
 import { eventsFor } from "./engine/EngineDuel.ts";
 import { stepClock } from "../../shared/clock.ts";
+import { MAX_PRESENTATION_MS, presentationMs } from "../../shared/pacing.ts";
 import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
 import { DEFAULT_SLEEVE, cleanSleeve } from "../../shared/sleeves.ts";
 import { cleanProfile } from "../../shared/profile.ts";
@@ -627,6 +628,12 @@ export class DuelRoom extends DurableObject<Env> {
       await this.ctx.storage.put(ENGINE_KEY, hostSnapshot);
     } else if (this.engine) {
       await this.ctx.storage.put(ENGINE_KEY, this.engine.snapshot());
+    }
+    // the clock waits while the players watch what just happened (shared/pacing.ts)
+    const show = Math.max(presentationMs(u.events?.[0]), presentationMs(u.events?.[1]));   // each seat's view
+    if (room.clock && show) {
+      const now = Date.now();
+      room.clock.graceUntil = Math.min(now + MAX_PRESENTATION_MS, Math.max(room.clock.graceUntil ?? 0, now) + show);
     }
     await this.save();
     this.sendEngineEvents(u.events);

@@ -7,21 +7,14 @@ export function useHoverPreview(setZoomCard: (code: number) => void) {
   const [preview, setPreview] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // the preview floats on the side away from the pointer, so it never covers what you're hovering
-  const pointerX = useRef(0);
-  useEffect(() => {
-    const move = (e: PointerEvent) => { pointerX.current = e.clientX; };
-    window.addEventListener("pointermove", move, { passive: true });
-    return () => window.removeEventListener("pointermove", move);
-  }, []);
-  const [previewRight, setPreviewRight] = useState(false);
+  // the preview always floats on the left (it used to jump to the side away from the pointer: restless)
   // for the Z (zoom) key: what's hovered right now
   const hoveringRef = useRef(false), previewRef = useRef<number | null>(null);
   hoveringRef.current = hovering;
   previewRef.current = preview;
   const onHoverCard = useCallback((code: number | null) => {
     clearTimeout(hoverTimer.current);
-    if (code) { setPreview(code); setHovering(true); setPreviewRight(pointerX.current < window.innerWidth / 2); }
+    if (code) { setPreview(code); setHovering(true); }
     else hoverTimer.current = setTimeout(() => setHovering(false), 350);
   }, []);
   /** A card named in the log: the same floating preview as a card on the field, in the spot it last used. */
@@ -63,5 +56,5 @@ export function useHoverPreview(setZoomCard: (code: number) => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { preview, setPreview, hovering, previewRight, onHoverCard, onLogCard, hoveringRef, previewRef };
+  return { preview, setPreview, hovering, onHoverCard, onLogCard, hoveringRef, previewRef };
 }

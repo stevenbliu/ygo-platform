@@ -16,19 +16,23 @@ import { attackStyle } from "./categories.ts";
 import * as fx from "./fx.ts";
 import * as sfxv from "./summonFx.ts";
 import { cardStars, starLabel } from "./stars.ts";
+import { RARITY_LABEL, isPreset } from "../../../../shared/rarity.ts";
 import { duelSettings } from "../duelSettings.ts";
 import { uiZoom } from "../uiScale.ts";
 import type { Intent, Spot } from "./intents.ts";
 import { play as sfx, type Sfx } from "./sfx.ts";
+import { BEAT_MS } from "../../../../shared/pacing.ts";
 
 export const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const MOVE_MS = 330, ROTATE_MS = 280, SHUFFLE_MS = 420, ATTACK_MS = 440, PULSE_MS = 600;
-/** Gap between consecutive intents of one update, and the cap on the whole timeline's start offsets. */
-const STAGGER: Record<Intent["t"], number> = { effect: 160, banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40, excavate: 600, summon: 240, activate: 200 };
-/** Long combos: after this many splashes in SPLASH_WINDOW ms, only big moments get one (for a while). */
-const SPLASH_BURST = 4, SPLASH_WINDOW = 15_000;
-const MAX_OFFSET = 800;
+/** The beat each intent gets before the next one starts (shared/pacing.ts: a summon or an activation holds the
+ *  stage for about a second), and the cap on the whole timeline's start offsets (a long combo plays faster). */
+const STAGGER: Record<Intent["t"], number> = { effect: 380, banner: 700, beat: 0, move: 90, rotate: 60, shuffle: 80, attack: BEAT_MS.attack, pulse: 40, excavate: 900, summon: BEAT_MS.summon, activate: BEAT_MS.activate };
+const beatOf = (it: Intent) => (it.t === "beat" ? it.ms : it.t === "move" && it.style === "draw" ? BEAT_MS.drawEach : it.t === "summon" && it.how === "set" ? BEAT_MS.set : STAGGER[it.t]);
+/** Waiting for a timeline to finish never takes longer than this (a stuck animation can't block the duel). */
+const SETTLE_CAP = 9000;
+const MAX_OFFSET = 6000;
 
 type Rects = Map<string, DOMRect>;
 
@@ -43,24 +47,59 @@ const center = fx.center;
 
 export class BoardAnimator {
   root: HTMLElement | null = null;
-  private pending: { intents: Intent[]; rects: Rects; flipRest: boolean } | null = null;
+  private pending: { intents: Intent[]; rects: Rects; flipRest: boolean; floor: number } | null = null;
+  /** The current timeline holds the stage until then (performance.now()); see settle(). */
+  private holdUntil = 0;
+  private waiters = new Set<() => void>();
   /** Count of animations started (debug / tests). */
   played = 0;
-  /** when recent card-art splashes played (to calm long combos down) */
-  private splashes: number[] = [];
 
   /** Record the current layout for `intents`. Merges with a capture that hasn't been played yet. */
-  capture(intents: Intent[], flipRest = false) {
+  /** `floor`: the least time this update holds the stage (ms), e.g. a phase banner that isn't an intent. */
+  capture(intents: Intent[], flipRest = false, floor = 0) {
     if (!this.root) { this.pending = null; return; }
     // nothing to animate: don't measure (it forces a layout of the whole 3D board)
-    if (!intents.length && !flipRest && !this.pending) return;
+    if (!intents.length && !flipRest && !floor && !this.pending) return;
     if (this.pending) {   // two updates before one render: the DOM still shows the first layout
       this.pending.intents.push(...intents);
       this.pending.flipRest ||= flipRest;
+      this.pending.floor += floor;
       return;
     }
-    this.pending = { intents: [...intents], rects: reducedMotion() ? new Map() : this.measure(), flipRest };
+    this.pending = { intents: [...intents], rects: reducedMotion() ? new Map() : this.measure(), flipRest, floor };
   }
+
+  /** Resolves once the update just shown has played out: its beats (shared/pacing.ts) have passed and its
+   *  animations have finished, or it was skipped. The socket waits for this before it shows the next update or
+   *  prompt, so every summon / activation / phase gets its moment before anyone is asked to decide. */
+  settle(): Promise<void> {
+    return new Promise((resolve) => {
+      const start = performance.now();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = () => { clearTimeout(timer); this.waiters.delete(done); resolve(); };
+      this.waiters.add(done);
+      const check = () => {
+        // a hidden tab: nothing to watch, don't hold the duel up
+        if (!this.root || document.hidden || performance.now() - start > SETTLE_CAP) return done();
+        if (this.pending) { timer = setTimeout(check, 30); return; }   // not on screen yet (React is rendering it)
+        const left = this.holdUntil - performance.now();
+        if (left > 0) { timer = setTimeout(check, Math.min(left, 250)); return; }
+        if (this.busy()) { timer = setTimeout(check, 60); return; }
+        done();
+      };
+      // React renders the new board and play() runs in a layout effect first
+      timer = setTimeout(check, 30);
+    });
+  }
+  /** One-off animations still running (not endless ambience, not CSS hover transitions). */
+  private busy(): boolean {
+    return !!this.root?.getAnimations({ subtree: true }).some((a) =>
+      !(a instanceof CSSTransition) && !(a instanceof CSSAnimation) && a.playState === "running" && a.effect?.getTiming().iterations !== Infinity);
+  }
+  /** The stage is held for the update just shown (its beats haven't passed yet). */
+  holding(): boolean { return this.holdUntil > performance.now() || this.waiters.size > 0 && this.busy(); }
+  /** Stop waiting: whatever waits on settle() goes on now. */
+  release() { this.holdUntil = 0; for (const w of [...this.waiters]) w(); }
 
   private measure(): Rects {
     const rects: Rects = new Map();
@@ -96,16 +135,17 @@ export class BoardAnimator {
     this.speed = duelSettings().animSpeed || 1;
     sfxv.setFxSpeed(this.speed);
     this.sounds(p.intents);
-    if (reducedMotion()) return;
+    const speed = this.speed;
+    if (reducedMotion()) { this.holdUntil = performance.now() + p.floor / speed; return; }
     const flipped = new Set<string>();
     // several Pendulum monsters arriving at once from the hand / Extra Deck = a Pendulum Summon
     const pendulums = p.intents.filter((it) => it.t === "summon" && it.how === "special" && (it.from === "hand" || it.from === "extra") && /Pendulum/i.test(getCard(it.code)?.type ?? "")).length;
     let offset = 0;
-    const total = p.intents.reduce((t, i) => t + STAGGER[i.t], 0);
+    const total = p.intents.reduce((t, i) => t + beatOf(i), 0);
     const squeeze = total > MAX_OFFSET ? MAX_OFFSET / total : 1;
     for (const it of p.intents) {
       const delay = Math.round(offset);
-      offset += STAGGER[it.t] * squeeze;
+      offset += beatOf(it) * squeeze;
       try {
         switch (it.t) {
           case "move": this.move(p.rects, it, delay, flipped); break;
@@ -118,10 +158,12 @@ export class BoardAnimator {
           case "summon": this.summon(it, delay, pendulums >= 2); break;
           case "activate": this.activate(it, delay); break;
           case "banner": this.banner(it.text, delay); break;
+          case "beat": break;
         }
       } catch (e) { console.warn("animation", e); }
     }
     if (p.flipRest) this.flipRest(p.rects, flipped);
+    this.holdUntil = performance.now() + Math.max(offset, p.floor) / speed;
   }
 
   /** One sound per kind of thing that happened, in timeline order. */
@@ -189,19 +231,21 @@ export class BoardAnimator {
     if (!this.root) return false;
     const anims = this.root.getAnimations({ subtree: true }).filter((a) =>
       !(a instanceof CSSAnimation) && a.effect && a.effect.getTiming().iterations !== Infinity && a.playState === "running");
-    if (!anims.length) return false;
+    if (!anims.length) {
+      if (this.holding()) { this.release(); return true; }
+      return false;
+    }
     for (const a of anims) { try { a.finish(); } catch { /* an endless one: leave it */ } }
     sfxv.resetSplashQueue();
+    this.release();
     return true;
   }
   /** A splash shows now: the page lets a click / Space skip it. */
   splashing(): boolean {
-    return !!this.root?.querySelector(".duel-anim-layer > .sfx-show, .duel-anim-layer > .sfx-portal, .duel-anim-layer > .sfx-splash, .duel-anim-layer > .sfx-cutin, .duel-anim-layer > .sfx-holo, .duel-anim-layer > .sfx-comic, .duel-anim-layer > .sfx-spot");
+    return !!this.root?.querySelector(".duel-anim-layer > .sfx-show, .duel-anim-layer > .sfx-portal, .duel-anim-layer > .sfx-splash, .duel-anim-layer > .sfx-cutin, .duel-anim-layer > .sfx-holo, .duel-anim-layer > .sfx-comic, .duel-anim-layer > .sfx-spot, .duel-anim-layer > .sfx-g");
   }
-  /** Cards that had their splash this duel (notable cards get one the first time; legendary ones always). */
-  private splashed = new Set<number>();
   /** A new duel in this room (rematch). */
-  resetDuel() { this.splashed.clear(); }
+  resetDuel() { /* nothing kept per duel */ }
 
   private move(rects: Rects, it: Extract<Intent, { t: "move" }>, delay: number, flipped: Set<string>) {
     const from = this.fromRect(rects, it.from);
@@ -227,6 +271,20 @@ export class BoardAnimator {
     if (layer && it.style === "whoosh") fx.whoosh(layer, run, from, delay);
     if (layer && it.style === "pillar") { const to = this.nowRect(it.to); if (to) fx.pillar(layer, run, to, delay + 120); }
     if (layer && it.style === "sparkle") { const to = this.nowRect(it.to); if (to) fx.sparkle(layer, run, from, to, delay); }
+    // drawn: lifts off the Deck and flies to its place in the hand (the hand card shows when it lands)
+    if (layer && it.style === "draw") {
+      const el = it.to.uid ? this.el(it.to.uid) : null;
+      const to = el?.getBoundingClientRect() ?? this.nowRect(it.to);
+      if (to?.width) {
+        if (it.to.uid) flipped.add(it.to.uid);
+        // start from the card on top of the Deck (the pile's box is the whole zone)
+        const top = this.zoneEl(it.from.zone)?.querySelector(".duel-card-back");
+        const start = top?.getBoundingClientRect();
+        fx.draw(layer, run, start?.width ? start : from, to, it.code, it.faceUp && it.code > 0, delay, top);
+        if (el) run(el, [{ opacity: 0 }, { offset: 0.9, opacity: 0 }, { opacity: 1 }], { duration: fx.DRAW_MS, delay, fill: "backwards" });
+        return;
+      }
+    }
     const target = it.flip && it.to.uid && !flipped.has(it.to.uid) ? this.el(it.to.uid) : null;
     if (target) {
       flipped.add(it.to.uid!);
@@ -341,8 +399,8 @@ export class BoardAnimator {
     const data = code ? getCard(code) : null;
     if (data && cardStars(data) === 3) {
       const layer0 = this.layer();
-      const sp = layer0 ? this.wantSplash("always") : null;
-      if (layer0 && sp) delay = sfxv.splash(layer0, this.run.bind(this), { code: code!, name: data.name, kicker: this.kicker(data, targetUid ? "Attacks" : "Direct attack"), tone: "#ff6a3c", at: ar, ...this.splashAt(ar, "summon"), short: true, skipHint: true }, delay);
+      const sp = layer0 ? this.wantSplash() : null;
+      if (layer0 && sp) delay = sfxv.splash(layer0, this.run.bind(this), { code: code!, name: data.name, kicker: this.kicker(data, targetUid ? "Attacks" : "Direct attack", a.dataset.foil), rarity: a.dataset.foil, tone: "#ff6a3c", at: ar, ...this.splashAt(ar, "summon"), short: true, skipHint: true }, delay);
     }
     const p = center(ar), q = center(tr);
     const dx = (q.x - p.x) * 0.72, dy = (q.y - p.y) * (targetUid ? 0.72 : 0.5);
@@ -478,24 +536,17 @@ export class BoardAnimator {
     ], { duration: 320, easing: "ease-in-out" });
   }
 
-  /** Whether this moment gets the card-art splash. `level`: "always" (legendary cards, bosses, Extra Deck
-   *  summons), "notable" (popular cards, staples: not in "short" mode or during a long combo), "none". */
-  private wantSplash(level: "always" | "notable" | "none", code = 0): "full" | "short" | null {
+  /** Whether this moment gets the card-art splash: every summon (but a Set) and every activation does, the
+   *  same way every time ("short" setting: the shorter splash; "off": none). How famous the card is only
+   *  changes its label and size, never whether it plays. */
+  private wantSplash(): "full" | "short" | null {
     const mode = duelSettings().summonFx;
-    if (mode === "off" || level === "none") return null;
-    // a notable card's splash plays the first time it shows up in this duel
-    if (level === "notable" && code && this.splashed.has(code)) return null;
-    if (code) this.splashed.add(code);
-    const now = performance.now();
-    this.splashes = this.splashes.filter((t) => now - t < SPLASH_WINDOW);
-    const busy = this.splashes.length >= SPLASH_BURST;
-    if ((mode === "short" || busy) && level !== "always") return null;
-    this.splashes.push(now);
-    return busy || mode === "short" ? "short" : "full";
+    return mode === "off" ? null : mode;
   }
-  /** "Staple · Synchro Summon" */
-  private kicker(card: ReturnType<typeof getCard>, what: string) {
-    const why = starLabel(card);
+  /** "Ultra Rare · Synchro Summon", or "Staple · Synchro Summon" for a common copy. */
+  private kicker(card: ReturnType<typeof getCard>, what: string, foil?: string) {
+    const rarity = foil && foil !== "common" ? (isPreset(foil) ? RARITY_LABEL[foil] : "Custom foil") : null;
+    const why = rarity ?? starLabel(card);
     return why ? `${why} · ${what}` : what;
   }
   /** The middle of the field, and whether a card at `r` is on the viewer's (lower) half. */
@@ -519,12 +570,11 @@ export class BoardAnimator {
     // the card has just landed (it flew in from the hand / Extra Deck): start once it's there
     let at = delay + MOVE_MS - 40;
     const run = this.run.bind(this);
-    // splash for the cards that are a moment: legendary / notable ones, bosses, Extra Deck summons
+    // every summon gets its splash (a Set card stays hidden); famous cards and bosses get the bigger one
     const stars = cardStars(data);
-    const level = it.code <= 0 || kind === "set" ? "none" : stars === 3 || big || extra ? "always" : stars === 2 ? "notable" : "none";
-    const sp = this.wantSplash(level, it.code);
+    const sp = it.code > 0 && kind !== "set" ? this.wantSplash() : null;
     if (sp && data) {
-      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, sfxv.SUMMON_LABEL[kind]), tone: sfxv.toneOf(kind), at: r, ...this.splashAt(r, "summon"), big: big || stars === 3, short: sp === "short", skipHint: true }, at);
+      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, sfxv.SUMMON_LABEL[kind], card?.dataset.foil), rarity: card?.dataset.foil, tone: sfxv.toneOf(kind), at: r, ...this.splashAt(r, "summon"), big: big || extra || stars === 3, short: sp === "short", skipHint: true }, at);
     }
     sfxv.summon(layer, run, r, kind, at, { card, stage: this.root?.querySelector(".duel-board-wrap"), big, markers: data?.linkmarkers });
   }
@@ -540,12 +590,12 @@ export class BoardAnimator {
     const tone = sfxv.toneOf(kind, data);
     const run = this.run.bind(this);
     let at = delay;
-    // only cards that are a moment get the splash (later chain links a shorter one)
+    // every activation gets its splash (chain link 2 and up the shorter one)
     const stars = cardStars(data);
-    const sp = data ? this.wantSplash(stars === 3 ? "always" : stars === 2 ? "notable" : "none", it.code) : null;
+    const sp = data ? this.wantSplash() : null;
     if (sp && data) {
       const what = it.link > 1 ? `Chain ${it.link} · ${sfxv.ACTIVATE_LABEL[kind]}` : sfxv.ACTIVATE_LABEL[kind];
-      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, what), tone, at: r, ...this.splashAt(r, "activate"), big: stars === 3 && it.link === 1, short: sp === "short" || it.link > 1, skipHint: true }, at);
+      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, what, card?.dataset.foil), rarity: card?.dataset.foil, tone, at: r, ...this.splashAt(r, "activate"), big: stars === 3 && it.link === 1, short: sp === "short" || it.link > 1, skipHint: true }, at);
     }
     sfxv.activate(layer, run, r, kind, at, { card, tone });
     const prev = it.prev ? this.el(it.prev)?.getBoundingClientRect() ?? null : null;

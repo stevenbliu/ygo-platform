@@ -176,14 +176,7 @@
 
 /* the floating preview switches to the right edge when the hovered card is on the left half */
 @media (min-width: 1001px) {
-  .duel-page.is-live .duel-floatpreview.is-right { left: auto; right: 12px; transform: translate(12px, -50%); }
-  .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: translate(0, -50%); }
 }
-/* scaled-copy:start */
-:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right { left: auto; right: 12px; transform: translate(12px, -50%); }
-:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: translate(0, -50%); }
-/* scaled-copy:end */
-
 
 
 
@@ -271,3 +264,10 @@
 .fx-send { box-shadow: 0 8px 18px rgb(0 0 0 / .5); }
 .fx-mill { box-shadow: 0 0 0 1px #cfd8c6, 0 8px 18px rgb(0 0 0 / .5); }
 .fx-excavate { box-shadow: 0 0 0 2px #fff6, 0 10px 24px rgb(0 0 0 / .6); z-index: 40; }
+/* drawing a card (anim/fx.ts draw): a two-sided card that flips face-up in flight, with a glint as it turns */
+.fx-draw { position: absolute; z-index: 45; pointer-events: none; perspective: 900px; will-change: transform; }
+.fx-draw-inner { position: absolute; inset: 0; transform-style: preserve-3d; }
+.fx-draw-face { inset: 0; backface-visibility: hidden; box-shadow: 0 10px 22px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .25); }
+.fx-draw-front { transform: rotateY(180deg); overflow: hidden; }
+.fx-draw-glint { position: absolute; inset: -10% auto -10% 0; width: 45%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .75), transparent); mix-blend-mode: screen; }

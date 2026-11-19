@@ -167,3 +167,219 @@ html.duel-scaled body { overflow: hidden; }
 .replay-pos { font-size: 12px; white-space: nowrap; }
 .replay-done { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 80%, transparent); border: 1px solid var(--border); backdrop-filter: blur(10px); box-shadow: var(--shadow); }
+
+/* ---------- the hovered card's preview is on top of everything (pickers, pile views, dialogs, menus) ---------- */
+.duel-page.is-live .duel-floatpreview { z-index: 90; }
+/* card pickers and pile views are docked, not modal: no dimmed backdrop, the board stays visible and live */
+.duel-modal-backdrop.is-docked { background: none !important; backdrop-filter: none !important; pointer-events: none; }
+.duel-modal-backdrop.is-docked > .duel-modal {
+  pointer-events: auto; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 16px 50px rgb(0 0 0 / .5), 0 0 0 1px rgb(0 0 0 / .2);
+}
+
+/* card details under each card in pickers, pile views and the decision's card lists */
+.duel-viewer-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); row-gap: 14px; }
+.duel-viewer-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.duel-viewer-cell > .duel-card { position: relative; width: var(--cw); aspect-ratio: 59 / 86; flex: none; }
+.duel-caption { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; text-align: center; font-size: 11px; line-height: 1.3; }
+.duel-caption-name { font-size: 12px; font-weight: 700; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.duel-caption-facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+.duel-caption-facts i { font-style: normal; font-weight: 700; padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.duel-caption-facts i.is-tuner { background: #1f8f4e; color: #fff; }
+.duel-caption-facts i.is-level { background: none; color: #e0a800; letter-spacing: .02em; }
+.duel-caption-facts i.is-rank { background: rgb(0 0 0 / .75); color: #f2f2f2; }
+.duel-caption-facts i.is-link { background: #1d5fa8; color: #fff; }
+.duel-caption-facts i.is-attr { display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; padding: 0; border-radius: 50%;
+  color: #fff; font-weight: 900; font-size: .95em; line-height: 1; box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / .55), 0 1px 2px rgb(0 0 0 / .4); }
+.duel-caption-facts i.is-type { background: none; padding: 0 2px; font-size: 1.15em; line-height: 1.2; }
+.duel-caption-facts i.is-cat { background: none; color: var(--muted); font-weight: 600; }
+.duel-caption-facts i.is-summon { background: none; color: var(--muted); font-weight: 600; padding: 0 2px; }
+.duel-caption-stats { font-weight: 800; font-variant-numeric: tabular-nums; }
+.engine-card .duel-caption { font-size: 10.5px; }
+.engine-card .duel-caption-facts i { padding: 0 4px; }
+html.duel-scaled .duel-page.is-live .duel-caption { font-size: max(11px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-caption-name { font-size: max(12px, var(--read)); }
+
+/* ---------- what you can do now: a card you can Summon / Activate / Attack with glows in that action's
+   colour and wears its tag (a pile glows the same when one of its cards can: the Extra Deck) ---------- */
+.duel-card.can-summon, .duel-zone.can-summon { --can: #ffb83d; }
+.duel-card.can-activate, .duel-zone.can-activate { --can: #36e3b4; }
+.duel-card.can-attack, .duel-zone.can-attack { --can: #ff5d5d; }
+.duel-card.can-set, .duel-zone.can-set { --can: var(--accent); }
+.duel-card:is(.can-summon, .can-activate, .can-attack).is-actionable,
+.duel-zone:is(.can-summon, .can-activate, .can-attack) {
+  box-shadow: 0 0 0 2px var(--can), 0 0 14px color-mix(in srgb, var(--can) 60%, transparent);
+  animation: duel-can 1.6s ease-in-out infinite;
+}
+.duel-card.can-set.is-actionable { box-shadow: 0 0 0 2px color-mix(in srgb, var(--can) 70%, transparent); }
+@keyframes duel-can {
+  50% { box-shadow: 0 0 0 3px var(--can), 0 0 24px color-mix(in srgb, var(--can) 80%, transparent); }
+}
+/* a light sweeping across the card */
+.duel-card:is(.can-summon, .can-activate, .can-attack).is-actionable .duel-card-inner::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(115deg, transparent 35%, color-mix(in srgb, var(--can) 45%, white) 50%, transparent 65%) no-repeat;
+  background-size: 250% 100%; mix-blend-mode: screen; opacity: .55; animation: duel-can-sweep 2.4s ease-in-out infinite;
+}
+/* a pile you can use (the Extra Deck: Special Summon) must be impossible to miss: thick pulsing ring, a halo,
+   the same light sweep over its top card, and a bigger tag */
+.duel-zone.duel-pile:is(.can-summon, .can-activate, .can-attack) {
+  outline: 3px solid var(--can); outline-offset: 2px; border-radius: 8px;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / .35), 0 0 22px 4px color-mix(in srgb, var(--can) 75%, transparent), 0 0 60px 10px color-mix(in srgb, var(--can) 35%, transparent);
+  animation: duel-can-pile 1.3s ease-in-out infinite;
+}
+@keyframes duel-can-pile {
+  50% { outline-offset: 5px; box-shadow: 0 0 0 2px rgb(0 0 0 / .35), 0 0 34px 8px color-mix(in srgb, var(--can) 95%, transparent), 0 0 90px 18px color-mix(in srgb, var(--can) 50%, transparent); }
+}
+.duel-zone.duel-pile:is(.can-summon, .can-activate, .can-attack) > .duel-card .duel-card-inner::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--can) 55%, white) 50%, transparent 70%) no-repeat;
+  background-size: 250% 100%; mix-blend-mode: screen; opacity: .8; animation: duel-can-sweep 1.8s ease-in-out infinite;
+}
+.duel-zone.duel-pile > .duel-can-tag { bottom: -12px; padding: 2px 10px; font-size: 12px; letter-spacing: .1em; animation: duel-can-tag 1.3s ease-in-out infinite; }
+@keyframes duel-can-tag { 50% { transform: translateX(-50%) translateY(-2px) scale(1.08); } }
+html.duel-scaled .duel-page.is-live .duel-zone.duel-pile > .duel-can-tag { font-size: max(12px, var(--read)); }
+@keyframes duel-can-sweep { 0% { background-position: 130% 0; } 60%, 100% { background-position: -30% 0; } }
+.duel-can-tag {
+  position: absolute; left: 50%; top: -9px; z-index: 5; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+  padding: 1px 7px; border-radius: 999px; background: var(--can); color: #14110b; box-shadow: 0 2px 6px rgb(0 0 0 / .45);
+  font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; line-height: 1.5;
+}
+.duel-zone > .duel-can-tag { top: auto; bottom: -9px; }
+/* (hovering shows the action buttons there instead) */
+.duel-card.is-clickable:hover > .duel-can-tag, .duel-card:focus-within > .duel-can-tag { opacity: 0; }
+.duel-zone.is-opp-side .duel-can-tag { rotate: 180deg; }
+html.duel-scaled .duel-page.is-live .duel-can-tag { font-size: max(10px, var(--read)); }
+@media (prefers-reduced-motion: reduce) {
+  .duel-card.is-actionable, .duel-zone[class*="can-"] { animation: none !important; }
+  .duel-card.is-actionable .duel-card-inner::after { animation: none; opacity: 0; }
+}
+
+/* ---------- chain prompts switch (Ask / Smart / Mine), above Next / End turn ---------- */
+.duel-chainmode { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px; align-self: flex-end;
+  background: color-mix(in srgb, var(--surface) 85%, transparent); border: 1px solid var(--border); box-shadow: 0 2px 8px rgb(0 0 0 / .25); }
+.duel-chainmode-label { padding: 0 6px 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.duel-chainmode button { min-height: 26px; padding: 2px 10px; border: 0; border-radius: 999px; background: none; color: var(--fg); font-size: 12px; font-weight: 700; cursor: pointer; }
+.duel-chainmode button:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.duel-chainmode button.is-on { background: var(--accent); color: var(--accent-fg); }
+html.duel-scaled .duel-page.is-live .duel-chainmode-label { font-size: max(11px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-chainmode button { font-size: max(12px, var(--read)); min-height: max(26px, var(--hit)); }
+
+/* ---------- each player's clock beside their LP: big, solid, and lit while it runs ---------- */
+.duel-page.is-live .duel-plate .duel-timer-slot { align-self: center; display: inline-flex; }
+/* (desktop plates: on the name row, so the plate doesn't grow) */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-plate .duel-pinfo { flex: 1 1 calc(100% - 110px); }
+  .duel-page.is-live .duel-plate .duel-timer-slot { order: 1; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-pinfo { flex: 1 1 calc(100% - 110px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-timer-slot { order: 1; }
+/* scaled-copy:end */
+
+.duel-page.is-live .duel-plate .turn-timer {
+  font-size: 18px; line-height: 1.2; padding: 3px 11px; border-radius: 999px; letter-spacing: .02em;
+  background: rgb(10 10 16 / .78); color: rgb(255 255 255 / .72); border: 1px solid rgb(255 255 255 / .16); box-shadow: 0 2px 8px rgb(0 0 0 / .3);
+}
+.duel-page.is-live .duel-plate .turn-timer.is-running {
+  color: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 2px 10px rgb(0 0 0 / .35);
+}
+.duel-page.is-live .duel-plate .turn-timer.is-low { color: #ffb347; } .duel-page.is-live .duel-plate .turn-timer.is-critical { color: #ff3b5c; border-color: #ff3b5c; }
+/* the turn sign on the other player's turn (or while they decide on yours): still faded back, but readable */
+.duel-page.is-live .duel-turnsign.is-theirs { opacity: .8; filter: none; }
+
+/* ---------- legible at any window size (docs/ux-rubric.md, npm run ux) ----------
+   The scaled page shrinks everything with the window (1366 px wide = 71 %). Text you read never shows under
+   11 px on screen, labels and badges under 9.5 px, and controls stay at least 24 px each way: a floor that only
+   applies once the window is small enough to need it (at full size every value here is the design's own). */
+html.duel-scaled .duel-page.is-live {
+  --read: calc(11px / var(--ui-zoom, 1)); --label: calc(9.5px / var(--ui-zoom, 1)); --hit: calc(24px / var(--ui-zoom, 1));
+}
+/* reading text: the log, the status line, the decision, the top bar, names */
+html.duel-scaled .duel-page.is-live .dl-who, html.duel-scaled .duel-page.is-live .dl-verb { font-size: max(11.5px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-log-card { font-size: max(12.5px, var(--read)); }
+html.duel-scaled .duel-page.is-live .dl-link, html.duel-scaled .duel-page.is-live .dl-title, html.duel-scaled .duel-page.is-live .dl-size { font-size: max(10.5px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-move,
+html.duel-scaled .duel-page.is-live .duel-more-btn,
+html.duel-scaled .duel-page.is-live .duel-topline button,
+html.duel-scaled .duel-page.is-live .duel-topline select,
+html.duel-scaled .duel-page.is-live .duel-engine-bar-hint,
+html.duel-scaled .duel-page.is-live .duel-engine-bar-count,
+html.duel-scaled .duel-page.is-live .duel-engine-bar-list,
+html.duel-scaled .duel-page.is-live .duel-engine-pilehint,
+html.duel-scaled .duel-page.is-live .engine-prompt__desc { font-size: max(12px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-engine-bar button { font-size: max(12px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-topline-meta { font-size: max(13px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-turnbtns button { font-size: max(15px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-back, html.duel-scaled .duel-page.is-live .duel-topline h1 { font-size: max(15px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-pname { font-size: max(15px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-floatpreview .duel-preview-text { font-size: max(calc(13px * clamp(.85, var(--preview-scale, 1), 1.35)), var(--read)); }
+html.duel-scaled .duel-page.is-live .turn-timer { font-size: max(11px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-plate .turn-timer { font-size: max(18px, var(--read)); }
+html.duel-scaled .duel-page.is-live .dl-turn-text b, html.duel-scaled .duel-page.is-live .dl-turn-text span,
+html.duel-scaled .duel-page.is-live .duel-chain-go, html.duel-scaled .duel-page.is-live .duel-turnsign small { font-size: max(12px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-plate .duel-pcounts { font-size: max(11px, var(--read)); }
+/* ATK / DEF under monsters: numbers you read at a glance */
+html.duel-scaled .duel-page.is-live .duel-stats { font-size: max(clamp(9px, calc(var(--cw) * .13), 13px), var(--read)); }
+/* on the cards themselves: Level / Tuner / materials, the face-down "set" badge */
+html.duel-scaled .duel-page.is-live .duel-trait { font-size: max(clamp(8px, calc(var(--cw) * .11), 12px), var(--label)); }
+html.duel-scaled .duel-page.is-live .duel-trait.is-tuner { font-size: max(clamp(7px, calc(var(--cw) * .09), 10px), var(--label)); }
+html.duel-scaled .duel-page.is-live .duel-badge-fd { font-size: max(8px, var(--label)); }
+html.duel-scaled .duel-page.is-live .duel-chainstack-title small { font-size: max(10px, var(--label)); }
+/* the decision's own cards and buttons */
+html.duel-scaled .duel-page.is-live .duel-chainstack-text b, html.duel-scaled .duel-page.is-live .duel-engine-pos-title { font-size: max(13px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-engine-pos-row > button { font-size: max(12px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-chainstack-text small { font-size: max(10px, var(--label)); }
+html.duel-scaled .duel-page.is-live .duel-chain-text b { font-size: max(13px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-chain-text small { font-size: max(11px, var(--label)); }
+html.duel-scaled .duel-page.is-live .dl-line.k-draw, html.duel-scaled .duel-page.is-live .dl-line.k-gy, html.duel-scaled .duel-page.is-live .dl-line.k-banish { font-size: max(11.5px, var(--read)); }
+html.duel-scaled .duel-page.is-live .dl-text :is(span, small, i) { font-size: max(1em, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: max(1.1em, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-floatpreview .duel-preview-text :is(span, p, small, em, b) { font-size: max(1em, var(--read)); }
+html.duel-scaled .duel-page.is-live .engine-card__name { font-size: max(.72em, var(--read)); }
+html.duel-scaled .duel-page.is-live .engine-prompt button { font-size: max(1em, var(--read)); min-height: var(--hit); }
+/* labels and badges */
+html.duel-scaled .duel-page.is-live .dl-phase-text, html.duel-scaled .duel-page.is-live .duel-pile-name { font-size: max(9.5px, var(--label)); }
+html.duel-scaled .duel-page.is-live .duel-chip,
+html.duel-scaled .duel-page.is-live .duel-clock-label,
+html.duel-scaled .duel-page.is-live .duel-pile-count,
+html.duel-scaled .duel-page.is-live .duel-chainstack-title,
+html.duel-scaled .duel-page.is-live .duel-source-tag,
+html.duel-scaled .duel-page.is-live .duel-engine-bar-kicker,
+html.duel-scaled .duel-page.is-live .duel-pick-count,
+html.duel-scaled .duel-page.is-live .duel-phasefx-sub,
+html.duel-scaled .duel-page.is-live .duel-turnno small,
+html.duel-scaled .duel-page.is-live .duel-lp > span:not(.duel-lp-num),
+html.duel-scaled .duel-page.is-live .duel-engine-bar-noback { font-size: max(11px, var(--label)); }
+/* controls: at least 24 px on screen */
+html.duel-scaled .duel-page.is-live .dl-title, html.duel-scaled .duel-page.is-live .dl-size,
+html.duel-scaled .duel-page.is-live .duel-topline button, html.duel-scaled .duel-page.is-live .duel-topline select,
+html.duel-scaled .duel-page.is-live .duel-back, html.duel-scaled .duel-page.is-live .duel-more-btn,
+html.duel-scaled .duel-page.is-live .duel-engine-bar button { min-height: var(--hit); }
+html.duel-scaled .duel-page.is-live .duel-back { display: inline-flex; align-items: center; }
+html.duel-scaled .duel-page.is-live .dl-size { min-width: var(--hit); }
+html.duel-scaled .duel-page.is-live .duel-reveal-head button { min-width: var(--hit); min-height: var(--hit); }
+html.duel-scaled .duel-page.is-live .duel-reveal-head b { font-size: max(15px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-help-btn { width: max(30px, var(--hit)); height: max(30px, var(--hit)); }
+
+/* phones: Next / End turn ride along at the bottom of the screen, and a decision is a bottom sheet just above
+   them (the duel scrolls; both used to sit under the field). The corner loses its layout containment there:
+   it would make the corner, not the screen, the frame for fixed elements. The site header steps aside during a
+   duel and the duel's own bar tightens up, so the field starts near the top. */
+@media (max-width: 1000px) {
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-turnbtns { position: fixed; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 60; margin: 0; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-turnbtns button { min-height: 44px; box-shadow: 0 6px 18px rgb(0 0 0 / .3); }
+  :where(html:not(.duel-scaled)) .duel-page.is-live { padding-bottom: 72px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-zone-label { font-size: 9.5px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-stats { font-size: max(11px, clamp(9px, calc(var(--cw) * .13), 13px)); }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-trait, :where(html:not(.duel-scaled)) .duel-page.is-live .duel-badge-fd { font-size: 9.5px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-reveal-head button { min-width: 32px; min-height: 32px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-phasebtn { min-height: 28px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-engine-bar { position: fixed; left: 8px; right: 8px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 61; max-height: 42vh; overflow: auto; margin: 0; box-shadow: 0 10px 30px rgb(0 0 0 / .35); }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-back { display: inline-flex; align-items: center; min-height: 32px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-corner { contain: none; }
+  :where(html:not(.duel-scaled)) .app:has(.duel-page.is-live) > .topbar { display: none; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-topline { gap: 6px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-topline h1 { font-size: 17px; }
+  :where(html:not(.duel-scaled)) .duel-page.is-live .duel-topline-meta { display: none; }
+}

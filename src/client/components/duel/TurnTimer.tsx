@@ -18,23 +18,27 @@ const fmt = (ms: number) => {
  *  clock's seconds (so the smooth sweeps run on the compositor, with no re-render per frame). */
 export function useClockLeft(timer: TurnClock, seat: 0 | 1, smooth = false) {
   const receivedAt = useMemo(() => Date.now(), [timer]);
-  const running = timer.running === seat;
+  const ticking = timer.running === seat;
   void smooth;
   const [, tick] = useState(0);
   useEffect(() => {
-    if (!running) return;
+    if (!ticking) return;
     const t = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(t);
-  }, [running]);
-  const left = Math.max(0, timer.remaining[seat] - (running ? (timer.serverNow - timer.since) + (Date.now() - receivedAt) : 0));
+  }, [ticking]);
+  // `since` ahead of the server's clock: the board is still playing out an update (shared/pacing.ts), the
+  // clock waits; it shows as paused until then
+  const elapsed = timer.serverNow - timer.since + (Date.now() - receivedAt);
+  const running = ticking && elapsed >= 0;
+  const left = Math.max(0, timer.remaining[seat] - (running ? elapsed : 0));
   /** 1 at the start of a second, 0 at its end */
   const secondFrac = running ? (left % 1000) / 1000 : 1;
   // fixed per server update: the clock's phase within a second when it arrived
   const secDelay = useMemo(() => {
-    const at = Math.max(0, timer.remaining[seat] - (running ? timer.serverNow - timer.since : 0));
+    const at = Math.max(0, timer.remaining[seat] - (ticking ? Math.max(0, timer.serverNow - timer.since) : 0));
     return `${-((1000 - (at % 1000)) % 1000) / 1000 - (Date.now() - receivedAt) / 1000}s`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timer, seat, running]);
+  }, [timer, seat, ticking]);
   return { left, running, secondFrac, secDelay };
 }
 

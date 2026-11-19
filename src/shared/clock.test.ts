@@ -46,6 +46,17 @@ describe("duel clock", () => {
     expect(c.remaining).toEqual([60_000, 60_000]);
   });
 
+  it("doesn't charge the grace time while an update plays out", () => {
+    const c = fresh(300_000);
+    stepClock(c, chess, 0, 1, 0, () => "0:1");
+    c.graceUntil = 5_000;                                   // an activation is showing until t = 5 s
+    stepClock(c, chess, 1_000, 1, 0, () => "0:1");
+    expect(c.since).toBe(5_000);
+    stepClock(c, chess, 4_000, 1, 0, () => "0:1");          // still showing: nothing charged
+    expect(c.remaining[0]).toBe(299_000);                   // (the 1 s before the grace started)
+    stepClock(c, chess, 8_000, 1, 0, () => "0:1");          // 3 s after it ended
+    expect(c.remaining[0]).toBe(296_000);
+  });
   it("reports who ran out", () => {
     const c = fresh(5_000);
     stepClock(c, chess, 0, 1, 1, () => "1:1");

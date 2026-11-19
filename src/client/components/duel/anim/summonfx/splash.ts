@@ -4,6 +4,7 @@ import type { SplashStyle } from "../../duelSettings.ts";
 import { cancelScheduled } from "../sfx.ts";
 import { bit, circleSvg, ctr, sfx, speed } from "./core.ts";
 import type { R, Run } from "./core.ts";
+import { brush, film, foilize, manga, popart, slash, stamp } from "./splashGraphic.ts";
 
 // ---------------------------------------------------------------------------------------
 // the card-art splash: the card itself, big, before its summon / activation plays on the field
@@ -25,6 +26,8 @@ export interface SplashOpts {
   big?: boolean;
   short?: boolean;
   style?: SplashStyle;
+  /** the card's rarity (shared/rarity.ts; its board element's data-foil): its foil on the splash */
+  rarity?: string;
   /** show "Click or press Space to skip" (the duel; not the lab) */
   skipHint?: boolean;
 }
@@ -33,7 +36,8 @@ export interface SplashOpts {
 export function splash(layer: HTMLElement, run: Run, o: SplashOpts, delay: number): number {
   // the queue runs in real time (speed-adjusted); `wait` is in animation time, which run() scales back
   const now = performance.now();
-  const ms = o.short ? 900 : o.big ? 1550 : 1250;
+  // one length per kind of splash (a big card's is larger, not longer)
+  const ms = o.short ? 900 : 1250;
   const start = Math.max(now + delay / speed, splashFree);
   const wait = (start - now) * speed;
   splashFree = start + (ms * 0.8) / speed;
@@ -43,13 +47,27 @@ export function splash(layer: HTMLElement, run: Run, o: SplashOpts, delay: numbe
   }
   sfx(o.big ? "splash-big" : "splash", { inMs: wait });
   const style = o.style ?? "showcase";
+  const first = layer.childElementCount;
+  const done = playStyle(style, layer, run, o, wait, ms);
+  // the card's rarity: its lettering on the name, its picture foil over the splash
+  if (o.rarity && o.rarity !== "common") for (const el of [...layer.children].slice(first)) if (!el.classList.contains("sfx-skiphint")) foilize(el as HTMLElement, run, o.rarity, wait, ms);
+  return done;
+}
+
+function playStyle(style: SplashStyle, layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: number): number {
   switch (style) {
     case "portal": return portal(layer, run, o, wait, ms);
-    case "banner": return banner(layer, run, o, wait, o.short ? 820 : o.big ? 1500 : 1150);
+    case "banner": return banner(layer, run, o, wait, o.short ? 820 : 1150);
     case "cutin": return cutin(layer, run, o, wait, ms);
     case "hologram": return hologram(layer, run, o, wait, ms);
     case "comic": return comic(layer, run, o, wait, ms);
     case "spotlight": return spotlight(layer, run, o, wait, ms);
+    case "manga": return manga(layer, run, o, wait, ms);
+    case "slash": return slash(layer, run, o, wait, ms);
+    case "popart": return popart(layer, run, o, wait, ms);
+    case "stamp": return stamp(layer, run, o, wait, ms);
+    case "film": return film(layer, run, o, wait, ms);
+    case "brush": return brush(layer, run, o, wait, ms);
     default: return showcase(layer, run, o, wait, ms);
   }
 }

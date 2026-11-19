@@ -3,7 +3,7 @@ import { useState, type DragEvent, type MouseEvent, type ReactNode } from "react
 import type { BoardState, CardInstance, Zone } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
 import { zoneKey as zoneKeyOf } from "../engine/boardRefs.ts";
-import { CardBack, CardView, type CardMark } from "./CardView.tsx";
+import { CAN_LABEL, CardBack, CardView, type CanKind, type CardMark } from "./CardView.tsx";
 import { Ambience } from "./anim/Ambience.tsx";
 
 export interface ZoneRef { zone: Zone; player: Seat; slot?: number }
@@ -11,6 +11,8 @@ export interface ZoneRef { zone: Zone; player: Seat; slot?: number }
 /** Engine-mode highlights (see components/engine/EngineBoard.tsx). Keys are card uids / zoneKeys. */
 export interface BoardMarks {
   actionable: Set<string>;     // cards with at least one legal action
+  /** What a card (or a pile, by zoneKey) can do right now: its glow and tag (Summon / Activate / Attack). */
+  can?: Map<string, CanKind>;
   selectable: Set<string>;     // cards a selection prompt lets you pick
   picked: Set<string>;         // cards already picked
   places: Set<string>;         // zones a select-place prompt offers
@@ -76,9 +78,10 @@ function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef
   const place = ui.marks?.places.has(key);
   const oppSide = at.zone !== "extraMonster" && at.player !== ui.me;
   const pick = ui.marks?.piles.get(key);
+  const can = ui.marks?.can?.get(key);
   return (
     <div
-      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending || place ? "is-targetable" : ""} ${place ? "is-place" : ""} ${pick ? "is-pick" : ""} ${oppSide ? "is-opp-side" : ""}`}
+      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending || place ? "is-targetable" : ""} ${place ? "is-place" : ""} ${pick ? "is-pick" : ""} ${can ? `can-${can}` : ""} ${oppSide ? "is-opp-side" : ""}`}
       data-zone={at.zone}
       data-player={at.player}
       data-slot={at.slot}
@@ -95,6 +98,7 @@ function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef
       {label && <span className="duel-zone-label">{label}</span>}
       {children}
       {!!pick && <span className="duel-pick-count" title={`${pick} card${pick === 1 ? "" : "s"} you can use here`}>{pick}</span>}
+      {can && can !== "set" && <span className={`duel-can-tag is-${can}`} aria-hidden="true">{CAN_LABEL[can]}</span>}
     </div>
   );
 }
@@ -116,6 +120,7 @@ function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | nu
           selected={ui.selectedUid === card.uid}
           flash={ui.flash.has(card.uid)}
           mark={markOf(ui, card.uid)}
+          can={ui.marks?.can?.get(card.uid)}
           badge={ui.marks?.badges.get(card.uid)}
           onHover={ui.onHover}
           onClick={(e) => { e.stopPropagation(); ui.onCard(card, at, e); }}
@@ -194,6 +199,7 @@ function Hand({ cards: inOrder, player, ui, own }: { cards: CardInstance[]; play
               onDragStart={dragStart(c)}
               selected={ui.selectedUid === c.uid}
               mark={mark}
+              can={ui.marks?.can?.get(c.uid)}
               badge={ui.marks?.badges.get(c.uid)}
               style={{ ["--i" as string]: i - (cards.length - 1) / 2 }}
               onHover={ui.onHover}

@@ -77,7 +77,10 @@ export function LogChat({ log, chat, canChat, onChat, onHover, initialTab = "log
   useEffect(() => { if (tab === "chat") setUnread(0); }, [tab]);
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    // (next frame, and not at all while the panel is hidden: the live duel shows its own log)
+    if (!el) return;
+    const f = requestAnimationFrame(() => { if (el.getClientRects().length) el.scrollTop = el.scrollHeight; });
+    return () => cancelAnimationFrame(f);
   }, [log.length, chat.length, tab]);
 
   const submit = (e: FormEvent) => {

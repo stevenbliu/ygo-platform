@@ -87,7 +87,7 @@ export interface RoomData {
   /** When the current duel started (for match history). */
   duelStartedAt?: string;
   /** Turn timer state (ms). `turn` = the board turn the clock last saw, to refill at a new turn. */
-  clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number; decision?: string | null };
+  clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number; decision?: string | null; graceUntil?: number };
 }
 
 export interface Attachment { id: string | null; name: string; seat: Seat | null; since?: number }

@@ -28,10 +28,16 @@ export function CardFace({ code, token, size = "small" }: { code: number; token?
 
 /** Engine-mode highlight: has a legal action / can be picked now / already picked. */
 export type CardMark = "actionable" | "selectable" | "picked";
+/** What you can do with a card right now (Main / Battle Phase): its glow colour and the tag on it. "set" glows
+ *  without a tag (Set is the quiet option). */
+export type CanKind = "summon" | "activate" | "attack" | "set";
+export const CAN_LABEL: Record<CanKind, string> = { summon: "Summon", activate: "Activate", attack: "Attack", set: "Set" };
 
 interface Props {
   card: CardInstance;
   mark?: CardMark;
+  /** Rules-enforced Main / Battle Phase: what you can do with it now (glow + tag). */
+  can?: CanKind;
   /** Small corner badge (chain link number, counters to remove). */
   badge?: string;
   draggable?: boolean;
@@ -64,14 +70,14 @@ function startPress(e: React.PointerEvent, code: number) {
 const endPress = () => clearTimeout(pressTimer);
 
 /** One card on the board / in a hand / in a viewer. Rotated for DEF, translucent when you can see your own face-down card. */
-export function CardView({ card, draggable, selected, flash, onClick, onHover, onDragStart, showCounters = true, mark, badge, style, quick, source }: Props) {
+export function CardView({ card, draggable, selected, flash, onClick, onHover, onDragStart, showCounters = true, mark, can, badge, style, quick, source }: Props) {
   const known = card.code !== HIDDEN_CODE || card.token;
   const def = card.position === "def" || card.position === "faceDownDef";
   const ownFaceDown = !card.faceUp && known;
   const counters = card.counters ? Object.entries(card.counters) : [];
   const resolveStyle = useDuelSettings().resolveFx;
   const rarity = useRarity()(card.faceUp && known && !card.token ? card.code : 0, card.owner);
-  const cls = ["duel-card", def ? "is-def" : "", ownFaceDown ? "is-own-facedown" : "", selected ? "is-selected" : "", flash ? "is-flash" : "", onClick ? "is-clickable" : "", mark ? `is-${mark}` : "", source ? "is-source" : ""].join(" ");
+  const cls = ["duel-card", def ? "is-def" : "", ownFaceDown ? "is-own-facedown" : "", selected ? "is-selected" : "", flash ? "is-flash" : "", onClick ? "is-clickable" : "", mark ? `is-${mark}` : "", can ? `can-${can}` : "", source ? "is-source" : ""].join(" ");
   return (
     <div
       className={cls}
@@ -101,6 +107,7 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
       {source && <span className="duel-srcfx" aria-hidden="true"><i className="sf1" /><i className="sf2" /><i className="sf3" /><i className="sf4" /></span>}
       {source && <ResolveFx style={resolveStyle} />}
       {source && <span className="duel-source-tag" aria-hidden="true">Resolving</span>}
+      {can && can !== "set" && <span className={`duel-can-tag is-${can}`} aria-hidden="true">{CAN_LABEL[can]}</span>}
       {badge && <span className="duel-badge duel-badge-chain" title={/^\d+$/.test(badge) ? `Chain Link ${badge}` : badge}>{badge}</span>}
       {!!quick?.length && (
         <span className="duel-quick" role="group" aria-label="Actions">
@@ -125,4 +132,49 @@ function shortLabel(l: string): string {
   if (/^Attack \(can attack directly\)/.test(l)) return "Attack";
   if (l.length > 22) return `${l.slice(0, 20)}…`;
   return l;
+}
+
+/** Attributes as on the cards: the kanji on its coloured disc. */
+const ATTRIBUTE: Record<string, [string, string]> = {
+  DARK: ["闇", "#7b3fb8"], LIGHT: ["光", "#d9a400"], EARTH: ["地", "#8a5a2b"], WATER: ["水", "#2a7fd4"],
+  FIRE: ["炎", "#d8452a"], WIND: ["風", "#2f9e57"], DIVINE: ["神", "#b8892a"],
+};
+/** Monster Types and Spell / Trap kinds as symbols (the name is in the tooltip). */
+const TYPE_ICON: Record<string, string> = {
+  Aqua: "💧", Beast: "🐾", "Beast-Warrior": "🐯", "Creator-God": "🌟", Cyberse: "💠", Dinosaur: "🦖", "Divine-Beast": "🌞",
+  Dragon: "🐉", Fairy: "🧚", Fiend: "😈", Fish: "🐟", Illusion: "🌀", Insect: "🐞", Machine: "⚙️", Plant: "🌿",
+  Psychic: "🔮", Pyro: "🔥", Reptile: "🦎", Rock: "🪨", "Sea Serpent": "🐍", Spellcaster: "🪄", Thunder: "⚡",
+  Warrior: "⚔️", "Winged Beast": "🪽", Wyrm: "🐲", Zombie: "💀",
+  // Spell / Trap kinds (the cards' own icons)
+  "Quick-Play": "⚡", Continuous: "∞", Equip: "✚", Field: "✠", Ritual: "🔥", Counter: "↩",
+};
+
+/** A card's key facts under it in pickers and pile views: ★ Level / ✦ Rank / LINK, Tuner, its Attribute and
+ *  Type as symbols, ATK / DEF (monsters); the kind of Spell / Trap. */
+export function CardCaption({ code, name = false }: { code: number; name?: boolean }) {
+  const c = code > 0 ? getCard(code) : null;
+  if (!c) return null;
+  const t = c.type ?? "";
+  const monster = c.category === "Monster";
+  const link = /Link/.test(t), xyz = /XYZ/i.test(t);
+  const summon = ["Fusion", "Synchro", "XYZ", "Link", "Ritual", "Pendulum"].find((k) => new RegExp(k, "i").test(t));
+  const attr = c.attribute ? ATTRIBUTE[c.attribute.toUpperCase()] : undefined;
+  const race = c.race ?? "";
+  const icon = TYPE_ICON[race];
+  return (
+    <span className="duel-caption">
+      {name && <b className="duel-caption-name">{c.name}</b>}
+      <span className="duel-caption-facts">
+        {monster && (link
+          ? <i className="is-link" title={`Link-${c.linkval ?? "?"}`}>LINK-{c.linkval ?? "?"}</i>
+          : c.level != null && <i className={xyz ? "is-rank" : "is-level"} title={`${xyz ? "Rank" : "Level"} ${c.level}`}>{xyz ? "✦" : "★"}{c.level}</i>)}
+        {attr && <i className="is-attr" style={{ background: attr[1] }} title={c.attribute ?? ""}>{attr[0]}</i>}
+        {race && race !== "Normal" && <i className="is-type" title={monster ? `${race}-Type` : `${race} ${c.category}`}>{icon ?? race}</i>}
+        {!monster && <i className="is-cat" title={c.category}>{c.category}</i>}
+        {/Tuner/.test(t) && <i className="is-tuner">Tuner</i>}
+        {summon && <i className="is-summon">{summon === "XYZ" ? "Xyz" : summon}</i>}
+      </span>
+      {monster && <span className="duel-caption-stats">{c.atk ?? "?"}{link ? "" : <> / {c.defense ?? "?"}</>}</span>}
+    </span>
+  );
 }

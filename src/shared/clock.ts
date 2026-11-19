@@ -12,6 +12,8 @@ export interface ClockState {
   turn: number;
   /** The decision being timed ("seat:prompt id"): when it changes, the player answered. */
   decision?: string | null;
+  /** Nobody's clock runs before this time: the board is still showing what just happened (shared/pacing.ts). */
+  graceUntil?: number;
 }
 export type ClockRules = Pick<RoomSettings, "timeControl" | "turnTimerSec" | "incrementSec">;
 
@@ -20,8 +22,9 @@ export type ClockRules = Pick<RoomSettings, "timeControl" | "turnTimerSec" | "in
  *  seat's current decision key (null when they have none). */
 export function stepClock(c: ClockState, rules: ClockRules, now: number, turn: number,
   waitingOn: ClockSeat | null, decisionOf: (seat: ClockSeat) => string | null): ClockSeat | null {
-  if (c.running !== null) c.remaining[c.running] = Math.max(0, c.remaining[c.running] - (now - c.since));
-  c.since = now;
+  // `since` can be in the future: the grace after an update (time spent watching it isn't charged)
+  if (c.running !== null) c.remaining[c.running] = Math.max(0, c.remaining[c.running] - Math.max(0, now - c.since));
+  c.since = Math.max(now, c.graceUntil ?? 0);
   if (c.running !== null && c.remaining[c.running] <= 0) {
     const out = c.running;
     c.running = null;

@@ -11,7 +11,7 @@ import { PHASE_LABEL, type DuelAction, type Phase, type Seat } from "../../share
 import { Board, PendulumStrip, type BoardUI, type Matchup, type ZoneRef } from "../components/duel/Board.tsx";
 import { indexBoard, refUid } from "../components/engine/boardRefs.ts";
 import { attackOutcome } from "../../shared/matchup.ts";
-import { CardView } from "../components/duel/CardView.tsx";
+import { CardCaption, CardView } from "../components/duel/CardView.tsx";
 import { useDecks } from "../components/duel/DeckPicker.tsx";
 import { buildMenu, dropAction, locate, occupantAt, pileMenu, type MenuItem, type Pending } from "../components/duel/menus.ts";
 import { ContextMenu, Modal, Toasts } from "../components/duel/Overlays.tsx";
@@ -38,7 +38,7 @@ import { SleeveContext } from "../components/duel/Sleeve.tsx";
 import { DuelLog, useRailFit } from "../components/duel/DuelLog.tsx";
 import { useUiScale } from "../components/duel/uiScale.ts";
 import { useHtmlClasses } from "../components/duel/pageFlag.ts";
-import { LpDialog, MorePopover, MoveStatus, NowPanel, PhaseCell, PlayerBar, TurnSign, decidingText } from "../components/duel/DuelParts.tsx";
+import { ChainModeSwitch, LpDialog, MorePopover, MoveStatus, NowPanel, PhaseCell, PlayerBar, TurnSign, decidingText } from "../components/duel/DuelParts.tsx";
 import { ReplayRecorder } from "../components/duel/replay.ts";
 import { DuelStats } from "../components/duel/DuelStats.tsx";
 import { getProfile } from "../components/duel/profileStore.ts";
@@ -68,6 +68,7 @@ export function DuelPage() {
   const recorder = useRef<ReplayRecorder | null>(null);
   const { conn, send, toast, clearPeek, promptEvents, chain } = useDuelSocket(roomId, {
     beforeState: (prev, next, events) => { anim.beforeState(prev, next, events); revealFeed.current?.(events); recorder.current?.add(next, events); },
+    settle: () => anim.animator.settle(),
   });
   const { identity } = useDuelIdentity();
   const { decks, deck, deckId, setDeckId, setSleeve, upsertDeck } = useDecks();
@@ -104,7 +105,7 @@ export function DuelPage() {
   const tilt = ds.tilt > 0;
   // PC scene: log + chat live in a drawer (closed by default), the card preview floats on hover
   const [drawer, setDrawer] = useState(false);
-  const { preview, setPreview, hovering, previewRight, onHoverCard, onLogCard, hoveringRef, previewRef } = useHoverPreview(setZoomCard);
+  const { preview, setPreview, hovering, onHoverCard, onLogCard, hoveringRef, previewRef } = useHoverPreview(setZoomCard);
 
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
   // the live duel keeps its full-size layout, scaled to the window as one piece (phones keep their own layout)
@@ -322,12 +323,12 @@ export function DuelPage() {
   // keyboard-only play: a cursor over the highlighted cards / zones (arrows, Enter, 1-9)
   useKeyboardCursor(!!live && engineMode && !auto.on);
 
-  // skip a splash: Space or a click while one is on screen (that press does nothing else)
+  // skip: Space while an update plays out (or a click during a splash) jumps to the decision; that press does nothing else
   useEffect(() => {
     const a = anim.animator;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== " " || (e.target as HTMLElement).closest?.("input, textarea, select")) return;
-      if (a.splashing() && a.skip()) { e.preventDefault(); e.stopImmediatePropagation(); }
+      if ((a.splashing() || a.holding()) && a.skip()) { e.preventDefault(); e.stopImmediatePropagation(); }
     };
     const onDown = (e: PointerEvent) => { if (a.splashing() && a.skip()) { e.preventDefault(); e.stopPropagation(); } };
     addEventListener("keydown", onKey, { capture: true });
@@ -537,6 +538,7 @@ export function DuelPage() {
               </>}
               right={session.stage === "duel" && <div className="duel-turnno" aria-label={`Turn ${board!.turn}`}><small>Turn</small><b>{board!.turn}</b></div>}
               corner={phaseCtl && session.stage === "duel" && <>
+                {playing && engineMode && <ChainModeSwitch mode={autoPass} set={setAutoPass} />}
                 {playing && (
                   <div className="duel-turnbtns">
                     <button className="duel-next-phase duel-quicknext" disabled={!phaseCtl.next} onClick={() => phaseCtl.next && goPhase(phaseCtl.next)}
@@ -593,7 +595,7 @@ export function DuelPage() {
               </div>
             )}
           </div>
-          <div className={`duel-floatpreview ${hovering && preview ? "is-shown" : ""} ${previewRight ? "is-right" : ""}`} aria-hidden={!hovering}>
+          <div className={`duel-floatpreview ${hovering && preview ? "is-shown" : ""}`} aria-hidden={!hovering}>
             <CardPreview code={preview} onZoom={(code) => setZoomCard(code)} />
           </div>
           <aside className="duel-side">
@@ -612,13 +614,17 @@ export function DuelPage() {
       )}
 
       {vc && (
-        <Modal title={vc.title} onClose={closeViewer} wide>
+        <Modal title={vc.title} onClose={closeViewer} wide docked>
           {vc.cards.length === 0 ? <p className="muted">No cards.</p> : (
             <div className="duel-viewer-grid">
               {vc.cards.map((c, i) => (
-                <CardView key={c.uid} card={{ ...c, faceUp: c.faceUp || c.code > 0 }} onHover={setPreview}
-                  mark={engineUi ? (engineBoard.marks.actionable.has(c.uid) ? "actionable" : engineBoard.marks.selectable.has(c.uid) ? "selectable" : undefined) : undefined}
-                  onClick={(e) => onViewerCard(c, vc.at(i), vc.host, e)} />
+                <div key={c.uid} className="duel-viewer-cell">
+                  <CardView card={{ ...c, faceUp: c.faceUp || c.code > 0 }} onHover={setPreview}
+                    mark={engineUi ? (engineBoard.marks.actionable.has(c.uid) ? "actionable" : engineBoard.marks.selectable.has(c.uid) ? "selectable" : undefined) : undefined}
+                    can={engineUi ? engineBoard.marks.can?.get(c.uid) : undefined}
+                    onClick={(e) => onViewerCard(c, vc.at(i), vc.host, e)} />
+                  {(c.faceUp || c.code > 0) && <CardCaption code={c.code} name />}
+                </div>
               ))}
             </div>
           )}

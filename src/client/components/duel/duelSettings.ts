@@ -22,8 +22,8 @@ export interface DuelSettings {
   /** Animations: how the card whose effect is resolving is marked, and in what colour. */
   resolveFx: ResolveFx;
   resolveColor: ResolveColor;
-  /** Summons and activations: "full" (signature effects + card-art splash), "short" (effects, splash only for
-   *  big moments), "off" (a plain glow). */
+  /** Summons and activations: "full" (signature effects + card-art splash), "short" (effects, a quicker
+   *  splash), "off" (a plain glow). */
   summonFx: SummonFxMode;
   /** Animation speed: 1 (normal), 1.5, 2. */
   animSpeed: number;
@@ -61,12 +61,14 @@ export interface DuelSettings {
 export const RESOLVE_FX = ["rings", "sparkle", "fireworks", "aura", "powerup", "holy", "void", "electric", "circle", "frost", "minimal"] as const;
 export type ResolveFx = (typeof RESOLVE_FX)[number];
 export const RESOLVE_FX_LABEL: Record<ResolveFx, string> = { rings: "Shockwave rings", sparkle: "Sparkles", fireworks: "Fireworks", aura: "Flame aura", powerup: "Power-up aura (energy + lightning)", holy: "Holy light (pillar + halo)", void: "Dark vortex", electric: "Electric current", circle: "Summoning circle", frost: "Frost crystals", minimal: "Minimal outline" };
-export const SPLASH_STYLES = ["showcase", "portal", "banner", "cutin", "hologram", "comic", "spotlight"] as const;
+export const SPLASH_STYLES = ["showcase", "portal", "banner", "cutin", "hologram", "comic", "spotlight", "manga", "slash", "popart", "stamp", "film", "brush"] as const;
 export type SplashStyle = (typeof SPLASH_STYLES)[number];
 export const SPLASH_STYLE_LABEL: Record<SplashStyle, string> = {
   showcase: "Showcase (the card rises out of its zone)", portal: "Portal (its art opens over the zone)", banner: "Banner (its art sweeps across the board)",
   cutin: "Cut-in (an art panel bursts in from the screen edge)", hologram: "Hologram (projected above the card)",
   comic: "Comic (a starburst panel)", spotlight: "Spotlight (the room dims, the card rises into the light)",
+  manga: "Manga (three panels slam in)", slash: "Double slash (two blade cuts, the name in the gap)", popart: "Pop art (four colour tiles, a ransom-note name)",
+  stamp: "Stamp (slammed down with an ink burst)", film: "Film strip (frames race across, one holds)", brush: "Ink brush (one stroke sweeps the art across)",
 };
 export const ANIM_SPEEDS = [1, 1.5, 2];
 export const UI_SIZES = ["auto", "compact", "medium", "large", "xl"] as const;
@@ -74,7 +76,7 @@ export type UiSize = (typeof UI_SIZES)[number];
 export const UI_SIZE_LABEL: Record<UiSize, string> = { auto: "Auto (readable on small windows)", compact: "Compact (full layout)", medium: "Medium", large: "Large", xl: "Extra large" };
 export const SUMMON_FX = ["full", "short", "off"] as const;
 export type SummonFxMode = (typeof SUMMON_FX)[number];
-export const SUMMON_FX_LABEL: Record<SummonFxMode, string> = { full: "Full (effects + card art splash)", short: "Short (splash only for big moments)", off: "Off (a simple glow)" };
+export const SUMMON_FX_LABEL: Record<SummonFxMode, string> = { full: "Full (effects + card art splash)", short: "Short (a quicker card art splash)", off: "Off (a simple glow)" };
 export const RESOLVE_COLORS = ["theme", "gold", "crimson", "azure", "emerald", "rainbow"] as const;
 export type ResolveColor = (typeof RESOLVE_COLORS)[number];
 export const RESOLVE_COLOR_LABEL: Record<ResolveColor, string> = { theme: "Theme colour", gold: "Gold", crimson: "Crimson", azure: "Azure", emerald: "Emerald", rainbow: "Rainbow" };

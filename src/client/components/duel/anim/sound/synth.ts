@@ -75,10 +75,24 @@ export function setMuted(m: boolean) {
 }
 export function onMuteChange(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; }
 
+let resuming = false;
+// Starting the audio engine takes a few hundred ms on the main thread: do it on the page's first click / key
+// (in the lobby, say) instead of in the middle of the first summon's animation.
+if (typeof window !== "undefined") {
+  const warm = () => { removeEventListener("pointerdown", warm, true); removeEventListener("keydown", warm, true); setTimeout(() => audio(), 0); };
+  addEventListener("pointerdown", warm, true);
+  addEventListener("keydown", warm, true);
+}
 export function audio(): AudioContext | null {
   if (typeof window === "undefined" || !("AudioContext" in window)) return null;
+  // before the page's first click / key nothing can play: don't build sounds into a silent context (that work
+  // and the browser's refusal to start it, every time, were a main-thread cost on every effect)
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return null;
   ctx ??= new AudioContext();
-  if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);   // needs a user gesture first; harmless before
+  if (ctx.state === "suspended" && !resuming) {
+    resuming = true;
+    void ctx.resume().catch(() => undefined).finally(() => { resuming = false; });
+  }
   return ctx;
 }
 

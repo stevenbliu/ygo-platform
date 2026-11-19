@@ -7,6 +7,7 @@
 // effect ever hints at a hidden card.
 
 import type { BoardState, CardInstance, Position } from "../../../../shared/duel.ts";
+import { BEAT_MS } from "../../../../shared/pacing.ts";
 import type { EngineCardRef, EngineEvent, Seat } from "../../../../shared/enginePrompts.ts";
 import { engineFirst, indexBoard, overlayHostUid, refUid, refZone, zoneKey, type Located } from "../../engine/boardRefs.ts";
 import type { ZoneRef } from "../Board.tsx";
@@ -17,6 +18,8 @@ export interface Spot { uid?: string; zone: string }
 
 /** How a moving card leaves / arrives: destroyed cards shatter, banished ones dissolve, revived ones rise in light… */
 export type MoveStyle = "shatter" | "dissolve" | "pillar" | "sparkle" | "whoosh"
+  /** drawn: lifts off the Deck, flips face-up (your own draws) on its way and lands in the hand */
+  | "draw"
   /** released as a Tribute: rises away in a golden glow */
   | "tribute"
   /** used as Synchro / Xyz / Fusion / Link material: flies into the new monster (`via`) */
@@ -45,6 +48,8 @@ export type Intent =
   | { t: "pulse"; uid: string; tone: "activate" | "summon" | "target" | "resolve" }
   /** A short text ribbon over the board ("Chain Link 2 resolves"). */
   | { t: "banner"; text: string }
+  /** Nothing moves: what comes next waits `ms` (a new turn / phase: its banner gets the stage first). */
+  | { t: "beat"; ms: number }
   /** A card effect's visual: `source` = the card, `targets` = cards it hit, `side` = whose field (wipes), `to` = burn victim. */
   | { t: "effect"; kind: EffectKind; source?: string; targets: Spot[]; side?: Seat; to?: Seat };
 
@@ -68,7 +73,7 @@ function moveStyle(from: string, to: string, engineSearch: boolean): MoveStyle |
   if (FIELD.has(from) && to === "gy") return "shatter";
   if (to === "banished") return "dissolve";
   if ((from === "gy" || from === "banished") && (to === "monster" || to === "extraMonster")) return "pillar";
-  if (from === "deck" && to === "hand") return engineSearch ? "sparkle" : undefined;
+  if (from === "deck" && to === "hand") return engineSearch ? "sparkle" : "draw";
   if (FIELD.has(from) && (to === "hand" || to === "deck" || to === "extra")) return "whoosh";
   return undefined;
 }
@@ -113,10 +118,13 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
 
   events.forEach((ev, i) => {
     switch (ev.e) {
+      // a new turn / phase: the banner (TurnBanner) has the stage before the draw / summon after it
+      case "turn": out.push({ t: "beat", ms: BEAT_MS.turn }); return;
+      case "phase": if ((!ev.step || ev.step === "start") && ev.phase !== "draw" && ev.phase !== "standby") out.push({ t: "beat", ms: BEAT_MS.phase }); return;
       case "draw": {
         ev.codes.forEach((code, k) => {
           const uid = `e${ev.player}-2-${handLen[ev.player] + k}`;
-          out.push({ t: "move", from: { zone: pileKey("deck", ev.player) }, to: { uid, zone: pileKey("hand", ev.player) }, code, faceUp: code > 0, flip: finalAt(i, uid), style: resolving !== null ? "sparkle" : undefined });
+          out.push({ t: "move", from: { zone: pileKey("deck", ev.player) }, to: { uid, zone: pileKey("hand", ev.player) }, code, faceUp: code > 0, flip: finalAt(i, uid), style: resolving !== null ? "sparkle" : "draw" });
         });
         handLen[ev.player] += ev.codes.length;
         return;

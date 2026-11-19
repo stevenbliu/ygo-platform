@@ -72,15 +72,17 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
   );
 }
 
-export function Modal({ title, onClose, children, wide }: { title: ReactNode; onClose(): void; children: ReactNode; wide?: boolean }) {
+/** A dialog. `docked`: no dimmed backdrop and the board stays live around it (card pickers and pile views:
+ *  you can still see, hover and preview the board while choosing); Esc or its ✕ closes it. */
+export function Modal({ title, onClose, children, wide, docked }: { title: ReactNode; onClose(): void; children: ReactNode; wide?: boolean; docked?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="duel-modal-backdrop" onClick={onClose}>
-      <div className={`duel-modal ${wide ? "is-wide" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div className={`duel-modal-backdrop ${docked ? "is-docked" : ""}`} onClick={docked ? undefined : onClose}>
+      <div className={`duel-modal ${wide ? "is-wide" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal={!docked}>
         <div className="duel-modal-head">
           <h2>{title}</h2>
           <button onClick={onClose} aria-label="Close">✕</button>
