@@ -54,6 +54,7 @@ jobs:
         run: npx wrangler d1 migrations apply DB --remote
 
       - name: Build and deploy
+        id: deploy
         run: npm run deploy
 
       # the live site in a real browser: a demo duel at three window sizes and the summon lab (e2e/smoke.e2e.ts)
@@ -64,10 +65,22 @@ jobs:
           npx playwright install --with-deps chromium
           npx playwright test
 
+      # recorded duel moments (public/scenes/) on the live site: UX rules + accessibility (axe), at desktop and
+      # laptop sizes, plus the splash timing check (scripts/ux/scenes.pw.ts). No screenshot diffs here: baselines
+      # are per machine, so they're a local check.
+      - name: Scene checks (live site)
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          BASE_URL: https://ygo-platform.stevenbliu.workers.dev
+          SCENE_SHOTS: "0"
+        run: npm run scenes
+
       - name: Keep the smoke test's screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test
-          path: test-results/
+          path: |
+            test-results/
+            playwright-report-scenes/
           retention-days: 7

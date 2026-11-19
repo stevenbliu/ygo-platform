@@ -15,11 +15,15 @@ when it can be measured.
 - Each kind of moment looks and sounds distinct (summon kinds, activation kinds, draws, phases).
 - Every summon (but a Set) and every activation gets its card-art splash, the same way every time: the card's
   fame changes the splash's label and size, never whether it plays. Chain link 2+ gets the short one.
+- A splash holds the stage: through the middle of its run (30-70%) it is fully visible, never fading out early.
+  (Put easing on each keyframe, not on the whole WAAPI effect: whole-effect easing moves the keyframes.)
+  [scenes: splash timing]
 
 ## The decision
 - What you can do right now shows on the card itself: a card you can Summon / Activate / Attack with glows in
   that action's colour and wears its tag; a pile with such a card (the Extra Deck) glows strongly enough to see
-  at a glance. Clicking that pile offers the action (only the usable cards) or View all.
+  at a glance: a ring 2 px or more, in a colour that stands out from the page behind the board. [stands-out]
+  Clicking that pile offers the action (only the usable cards) or View all.
 - Card pickers and pile views are docked, not modal: no dimmed or blurred board behind them, and every card in
   them shows its details (★ Level / Rank / Link, Tuner, Attribute and Type symbols, ATK / DEF).
 - Chain prompts (Ask / Smart / Mine) switch with one click beside Next / End turn.
@@ -45,9 +49,13 @@ when it can be measured.
   [hit-target] [controls-overlap]
 - No control is cut off by the window edge (the hand excepted). [offscreen-control]
 - Labels aren't cut off without an ellipsis. [clipped-text]
+- Accessible: text contrast, names on controls and images, valid roles (axe, no serious / critical issues; the
+  scene tests run it on every fixed moment).
 
 ## Smooth
 - No main-thread task long enough to drop frames during play (120 ms or more is flagged). [long-task]
+  With a UX_SOURCEMAP build each finding names the source file:line; a long frame with almost no script or
+  layout in it is [frame-delay] (the headless browser's missing GPU), low, not the page's code.
 - No page errors. [page-error]
 
 ## Reading the report

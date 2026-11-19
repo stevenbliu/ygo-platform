@@ -21,7 +21,7 @@ export function CardPreview({ code, onZoom, large }: { code: number | null; onZo
             <span className="duel-preview-art" data-foil={rarity !== "common" ? rarity : undefined}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /><RarityFoil rarity={rarity} type={card?.type} code={code} /></span>
           </button>
         : <span className="duel-preview-art" data-foil={rarity !== "common" ? rarity : undefined}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /><RarityFoil rarity={rarity} type={card?.type} code={code} /></span>}
-      <div className="duel-preview-text">
+      <div className="duel-preview-text" tabIndex={0} aria-label="Card text">
         {/* name and ATK / DEF share one row (less height, more room for the text) */}
         <div className="duel-preview-head">
           <h3>{card?.name ?? `Card ${code}`}</h3>

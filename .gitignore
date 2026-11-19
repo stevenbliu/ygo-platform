@@ -10,3 +10,6 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 ux-report/
+scripts/ux/baselines/
+playwright-report-scenes/
+test-results-scenes/

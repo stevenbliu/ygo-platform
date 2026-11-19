@@ -26,5 +26,5 @@ export function sleeveParts(raw: string | undefined): { className: string; style
 
 export function SleeveBack({ sleeve, className = "" }: { sleeve?: string; className?: string }) {
   const p = sleeveParts(sleeve);
-  return <div className={`duel-card-back ${p.className} ${className}`} style={p.style} aria-label="Face-down card" dangerouslySetInnerHTML={{ __html: p.html }} />;
+  return <div className={`duel-card-back ${p.className} ${className}`} style={p.style} role="img" aria-label="Face-down card" dangerouslySetInnerHTML={{ __html: p.html }} />;
 }

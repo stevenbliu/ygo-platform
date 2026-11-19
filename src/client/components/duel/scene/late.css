@@ -202,9 +202,10 @@ html.duel-scaled .duel-page.is-live .duel-caption-name { font-size: max(12px, va
 
 /* ---------- what you can do now: a card you can Summon / Activate / Attack with glows in that action's
    colour and wears its tag (a pile glows the same when one of its cards can: the Extra Deck) ---------- */
-.duel-card.can-summon, .duel-zone.can-summon { --can: #ffb83d; }
-.duel-card.can-activate, .duel-zone.can-activate { --can: #36e3b4; }
-.duel-card.can-attack, .duel-zone.can-attack { --can: #ff5d5d; }
+/* (each hue mixed a little toward the theme's text colour, so the ring contrasts with light and dark boards alike) */
+.duel-card.can-summon, .duel-zone.can-summon { --can: color-mix(in srgb, #ffaa1f 72%, var(--fg)); }
+.duel-card.can-activate, .duel-zone.can-activate { --can: color-mix(in srgb, #12c995 70%, var(--fg)); }
+.duel-card.can-attack, .duel-zone.can-attack { --can: color-mix(in srgb, #ff4545 75%, var(--fg)); }
 .duel-card.can-set, .duel-zone.can-set { --can: var(--accent); }
 .duel-card:is(.can-summon, .can-activate, .can-attack).is-actionable,
 .duel-zone:is(.can-summon, .can-activate, .can-attack) {
@@ -242,7 +243,7 @@ html.duel-scaled .duel-page.is-live .duel-zone.duel-pile > .duel-can-tag { font-
 @keyframes duel-can-sweep { 0% { background-position: 130% 0; } 60%, 100% { background-position: -30% 0; } }
 .duel-can-tag {
   position: absolute; left: 50%; top: -9px; z-index: 5; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
-  padding: 1px 7px; border-radius: 999px; background: var(--can); color: #14110b; box-shadow: 0 2px 6px rgb(0 0 0 / .45);
+  padding: 1px 7px; border-radius: 999px; background: var(--can); color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .6); box-shadow: 0 2px 6px rgb(0 0 0 / .45);
   font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; line-height: 1.5;
 }
 .duel-zone > .duel-can-tag { top: auto; bottom: -9px; }
@@ -329,6 +330,17 @@ html.duel-scaled .duel-page.is-live .duel-chainstack-title small { font-size: ma
 /* the decision's own cards and buttons */
 html.duel-scaled .duel-page.is-live .duel-chainstack-text b, html.duel-scaled .duel-page.is-live .duel-engine-pos-title { font-size: max(13px, var(--read)); }
 html.duel-scaled .duel-page.is-live .duel-engine-pos-row > button { font-size: max(12px, var(--read)); }
+/* the "Your decision" panel, toasts */
+html.duel-scaled .duel-page.is-live .duel-now-text { font-size: max(12px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-now-text b { font-size: max(13px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-now-text small { font-size: max(10px, var(--label)); }
+html.duel-scaled .duel-page.is-live .duel-now-btn { font-size: max(12px, var(--read)); min-height: var(--hit); }
+html.duel-scaled .duel-page.is-live .duel-toast { font-size: max(13px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-status .duel-engine-status, html.duel-scaled .duel-page.is-live .duel-status .duel-engine-wait { font-size: max(12px, var(--read)); }
+html.duel-scaled .duel-page.is-live .duel-menu-title { font-size: max(13px, var(--read)); }
+/* the decision panel's kicker in the theme's accent, mixed toward the text colour so it reads on any panel */
+.duel-page.is-live .duel-engine-bar-kicker { color: color-mix(in srgb, var(--accent) 70%, var(--fg)); }
+.duel-page.is-live .duel-engine-bar.is-chain .duel-engine-bar-kicker { color: color-mix(in srgb, var(--warn) 55%, var(--fg)); }
 html.duel-scaled .duel-page.is-live .duel-chainstack-text small { font-size: max(10px, var(--label)); }
 html.duel-scaled .duel-page.is-live .duel-chain-text b { font-size: max(13px, var(--read)); }
 html.duel-scaled .duel-page.is-live .duel-chain-text small { font-size: max(11px, var(--label)); }

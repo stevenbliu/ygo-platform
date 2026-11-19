@@ -1,5 +1,6 @@
 // Client-side duel plumbing: identity (guest name / account), the room websocket, card data cache.
 
+import { SCENE_PREFIX, SceneSocket, isScene } from "./sceneSocket.ts";
 import { applyChainEvents, chainFromSession, type ChainLink } from "./ChainStack.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, lookupCards } from "../../api.ts";
@@ -110,7 +111,9 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
     };
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      const ws = new WebSocket(`${proto}://${location.host}/ws/room/${encodeURIComponent(roomId)}`);
+      // a scene fixture (/duel/scene-<name>): a recorded moment replayed, no server (sceneSocket.ts)
+      const ws = isScene(roomId) ? (new SceneSocket(roomId.slice(SCENE_PREFIX.length)) as unknown as WebSocket)
+        : new WebSocket(`${proto}://${location.host}/ws/room/${encodeURIComponent(roomId)}`);
       wsRef.current = ws;
       setConn((c) => ({ ...c, status: "connecting" }));
       ws.onopen = () => {
@@ -121,6 +124,8 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
       ws.onmessage = (e) => {
         let msg: ServerMsg;
         try { msg = JSON.parse(e.data); } catch { return; }
+        // the scene recorder (scripts/ux/record-scenes.mjs) listens here
+        (window as { __duelMsg?: (m: ServerMsg) => void }).__duelMsg?.(msg);
         if (FLOW.has(msg.t)) { inbox.push(msg); void drain(); } else handle(msg);
       };
       handle = (msg: ServerMsg) => {

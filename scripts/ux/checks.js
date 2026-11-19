@@ -111,9 +111,43 @@ function uxChecks() {
     else if (sel.includes("plate") ? !els.every(onScreen) : !els.some(onScreen)) add("medium", "essentials", `${what}:offscreen`, `${what} not fully on screen without scrolling`);
   }
 
-  // 8. smoothness: long main-thread tasks since the last sample
+  // 8. smoothness: long main-thread tasks since the last sample, with the scripts that ran in that frame
+  //    (Long Animation Frames: script URL + function + char position; audit.mjs maps them to source files)
   const long = (window.__uxLongTasks ?? []).splice(0);
-  for (const ms of long) if (ms >= 120) add(ms >= 250 ? "medium" : "low", "long-task", ms >= 250 ? "250ms+" : "120ms+", `The page froze for ${Math.round(ms)} ms (a dropped-frame stutter)`);
+  for (const t of long) {
+    const ms = typeof t === "number" ? t : t.duration;
+    if (ms < 120) continue;
+    // a long frame with little script / style / layout work in it was just late to the screen (headless Chromium
+    // renders without a GPU): not the page's code. Reported apart, low, so real stutters stand out.
+    if (typeof t !== "number" && t.work < ms * 0.5) {
+      add("low", "frame-delay", ms >= 250 ? "250ms+" : "120ms+", `A frame took ${Math.round(ms)} ms with only ${Math.round(t.work)} ms of script / layout in it (compositor / GPU, not page code)`);
+      continue;
+    }
+    const top = (t.scripts ?? []).slice(0, 3);
+    const where = top.map((x) => `${x.fn || x.invoker || "?"} @ ${x.url.split("/").pop()}:${x.pos} (${Math.round(x.ms)} ms)`).join(" | ");
+    add(ms >= 250 ? "medium" : "low", "long-task", ms >= 250 ? "250ms+" : "120ms+", `The page froze for ${Math.round(ms)} ms (a dropped-frame stutter)`, where || undefined)
+    out[out.length - 1].scripts = top;
+  }
+
+  // 9. what you can do stands out: a usable card / pile has a real ring (2px+) in a colour that contrasts with
+  //    the page behind the board (the Extra Deck's glow was once too faint to notice)
+  const lum = (c) => {
+    const m = c.match(/[\d.]+/g); if (!m) return null;
+    const [r, g, b] = m.slice(0, 3).map((v) => { v = Number(v) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const toRgb = (c) => { const d = document.createElement("i"); d.style.color = c; document.body.appendChild(d); const v = getComputedStyle(d).color; d.remove(); return v; };
+  const pageBg = lum(getComputedStyle(document.body).backgroundColor);
+  for (const el of page.querySelectorAll(".duel-card.is-actionable[class*='can-']:not(.can-set), .duel-zone[class*='can-']:not(.can-set)")) {
+    if (!visible(el)) continue;
+    const cs = getComputedStyle(el);
+    const ring = Math.max(parseFloat(cs.outlineWidth) || 0, ...[...cs.boxShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px (-?[\d.]+)px (-?[\d.]+)px/g)].map((m) => Number(m[4])));
+    const can = lum(toRgb(cs.getPropertyValue("--can").trim() || "transparent"));
+    const contrast = can != null && pageBg != null ? (Math.max(can, pageBg) + 0.05) / (Math.min(can, pageBg) + 0.05) : 99;
+    const kind = [...el.classList].find((c) => c.startsWith("can-"));
+    if (ring < 2) add("medium", "stands-out", `ring:${kind}`, `A ${kind.slice(4)} glow is only ${ring}px: easy to miss`, label(el));
+    else if (contrast < 1.8) add("medium", "stands-out", `contrast:${kind}`, `A ${kind.slice(4)} glow barely contrasts with the page (${contrast.toFixed(2)}:1)`, label(el));
+  }
   return out;
 }
 
@@ -122,7 +156,16 @@ function uxChecks() {
 function uxInstall() {
   window.__uxEarlyPrompts = [];
   window.__uxLongTasks = [];
-  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__uxLongTasks.push(e.duration); }).observe({ type: "longtask", buffered: false }); } catch { /* not supported */ }
+  // Long Animation Frames (Chrome 123+) say which scripts ran; plain long tasks are the fallback
+  const loaf = PerformanceObserver.supportedEntryTypes?.includes("long-animation-frame");
+  try {
+    if (loaf) new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__uxLongTasks.push({
+      duration: e.duration,
+      work: (e.scripts ?? []).reduce((s, x) => s + x.duration, 0) + (e.renderStart ? e.startTime + e.duration - e.renderStart : 0),
+      scripts: [...(e.scripts ?? [])].sort((a, b) => b.duration - a.duration).map((x) => ({ invoker: x.invoker, fn: x.sourceFunctionName, url: x.sourceURL, pos: x.sourceCharPosition, ms: x.duration })),
+    }); }).observe({ type: "long-animation-frame", buffered: false });
+    else new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__uxLongTasks.push(e.duration); }).observe({ type: "longtask", buffered: false });
+  } catch { /* not supported */ }
   // the splash / summon / draw layers: a decision appearing while one of them runs is too early
   const kinds = [["fx-draw", "draw"], ["sfx-", "summon / activation"], ["duel-phasefx", "phase banner"]];
   const running = () => {
@@ -148,4 +191,39 @@ function uxInstall() {
     }
     lastPrompt = key;
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
+// The next card-art splash, sampled every frame: how visible it is (the most opaque large part, opacity
+// multiplied up its parents) against how far along its own timeline it is. Splashes must hold the stage:
+// fully visible through the middle of their run (an easing on the whole animation once made them fade
+// out at half time). Returns { style, samples: [[progress 0..1, visibility 0..1]...] } or null.
+// eslint-disable-next-line no-unused-vars
+async function uxSampleSplash(timeoutMs = 4000) {
+  const SEL = ".sfx-show, .sfx-portal, .sfx-splash, .sfx-cutin, .sfx-holo, .sfx-comic, .sfx-spot, .sfx-g";
+  const frame = () => new Promise((r) => requestAnimationFrame(r));
+  const t0 = performance.now();
+  let root;
+  while (!(root = document.querySelector(SEL))) { if (performance.now() - t0 > timeoutMs) return null; await frame(); }
+  const anims = root.getAnimations({ subtree: true });
+  if (!anims.length) return null;
+  const main = anims.reduce((a, b) => (b.effect.getComputedTiming().endTime > a.effect.getComputedTiming().endTime ? b : a));
+  const { delay = 0, duration } = main.effect.getTiming();
+  const samples = [];
+  while (root.isConnected) {
+    const p = (Number(main.currentTime) - delay) / Number(duration);
+    if (p > 1 || main.playState === "finished") break;
+    if (p >= 0) {
+      let vis = 0;
+      for (const el of [root, ...root.querySelectorAll("*")]) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 40 || r.height < 30) continue;
+        let o = 1;
+        for (let x = el; x && x !== root.parentElement; x = x.parentElement) o *= Number(getComputedStyle(x).opacity);
+        vis = Math.max(vis, o);
+      }
+      samples.push([Math.round(p * 1000) / 1000, Math.round(vis * 100) / 100]);
+    }
+    await frame();
+  }
+  return { style: [...root.classList].find((c) => c.startsWith("sfx-") && c !== "sfx-g") ?? "?", duration: Number(duration), samples };
 }

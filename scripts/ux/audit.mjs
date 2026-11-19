@@ -9,6 +9,7 @@
 //   node scripts/ux/audit.mjs [--secs 60] [--every 2500] [--base http://localhost:8788] [--sizes 1920x1080,1366x768,390x844]
 import { chromium } from "@playwright/test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { isSource, sourceAtChar } from "./sourcemap.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +60,16 @@ for (const size of SIZES) {
   await page.close();
 }
 await browser.close();
+
+// stutters: map the scripts behind each slow frame (bundle URL + char position) to source files, when the build
+// has source maps (UX_SOURCEMAP=1 npm run build)
+let mapped = 0;
+for (const s of samples) for (const f of s.findings) if (f.scripts?.length) {
+  const named = f.scripts.map((x) => `${sourceAtChar(x.url, x.pos) ?? `${x.fn || x.invoker || "?"} @ ${x.url.split("/").pop()}:${x.pos}`} (${Math.round(x.ms)} ms)`);
+  if (named.some((n) => /^(src|node_modules)\//.test(n))) mapped++;
+  f.where = named.join(" | ");
+}
+if (samples.some((s) => s.findings.some((f) => f.rule === "long-task")) && !mapped) console.log("(stutters not mapped to source: build with UX_SOURCEMAP=1 npm run build for file:line)");
 
 // unique findings, ranked: severity, then how often they showed up
 const RANK = { high: 0, medium: 1, low: 2 };

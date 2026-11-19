@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { toCss } from "./uiScale.ts";
 import type { MenuItem } from "./menus.ts";
 import type { Toast } from "./useDuel.ts";
@@ -41,7 +41,7 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
 
   return (
     <div className="duel-menu-backdrop" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
-      <div className="duel-menu" ref={ref} style={{ left: pos.left, top: pos.top }} onClick={(e) => e.stopPropagation()} role="menu">
+      <div className="duel-menu" ref={ref} style={{ left: pos.left, top: pos.top }} onClick={(e) => e.stopPropagation()}>
         {(cur.title || stack.length > 1) && (
           <div className="duel-menu-title">
             {stack.length > 1 && <button className="duel-menu-back" onClick={() => setStack((s) => s.slice(0, -1))} aria-label="Back">‹</button>}
@@ -49,6 +49,7 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
           </div>
         )}
         {cur.items.length === 0 && <div className="duel-menu-empty muted">Nothing to do here.</div>}
+        <div className="duel-menu-items" role="menu" aria-label={typeof cur.title === "string" ? cur.title : "Actions"}>
         {cur.items.map((it, i) => (
           <button
             key={i}
@@ -64,9 +65,10 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
           </button>
         ))}
         {/* an obvious way out */}
-        <button className="duel-menu-item duel-menu-close" onClick={() => (stack.length > 1 ? setStack((s) => s.slice(0, -1)) : onClose())}>
+        <button role="menuitem" className="duel-menu-item duel-menu-close" onClick={() => (stack.length > 1 ? setStack((s) => s.slice(0, -1)) : onClose())}>
           <span>{stack.length > 1 ? "‹ Back" : "✕ Close"}</span><kbd>Esc</kbd>
         </button>
+        </div>
       </div>
     </div>
   );
@@ -75,6 +77,7 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
 /** A dialog. `docked`: no dimmed backdrop and the board stays live around it (card pickers and pile views:
  *  you can still see, hover and preview the board while choosing); Esc or its ✕ closes it. */
 export function Modal({ title, onClose, children, wide, docked }: { title: ReactNode; onClose(): void; children: ReactNode; wide?: boolean; docked?: boolean }) {
+  const titleId = useId();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     addEventListener("keydown", onKey);
@@ -82,9 +85,9 @@ export function Modal({ title, onClose, children, wide, docked }: { title: React
   }, [onClose]);
   return (
     <div className={`duel-modal-backdrop ${docked ? "is-docked" : ""}`} onClick={docked ? undefined : onClose}>
-      <div className={`duel-modal ${wide ? "is-wide" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal={!docked}>
+      <div className={`duel-modal ${wide ? "is-wide" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal={!docked} aria-labelledby={titleId}>
         <div className="duel-modal-head">
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="duel-modal-body">{children}</div>

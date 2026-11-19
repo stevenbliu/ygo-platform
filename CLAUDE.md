@@ -13,8 +13,11 @@ Live: https://ygo-platform.stevenbliu.workers.dev · repo stevenbliu/ygo-platfor
 - **Keep this file current.** In the same change as the code, update it when you add, move, split or delete a
   file or folder named in the Map, add or change a command / script, or set up a new convention or rule. Edit the
   line that's wrong rather than appending notes; keep it a map, not a changelog (no history, no feature lists).
-- Duel UI work: run `npm run ux` and read `ux-report/index.html` (findings + screenshots) against
-  `docs/ux-rubric.md` before calling it done. When the user corrects how the duel should look or feel, add the
+- Duel UI work: run `npm run scenes` (fixed duel moments: UX rules, axe, screenshot diffs) and `npm run ux` (live
+  demo duels; read `ux-report/index.html`) against `docs/ux-rubric.md` before calling it done. A changed look
+  fails the scenes until you accept it: open `playwright-report-scenes/`, check each diff is intended, then
+  `npm run scenes -- --update-snapshots`. Re-record the fixtures (`npm run scenes:record`) when the server
+  message shapes change. When the user corrects how the duel should look or feel, add the
   rule to the rubric (and a check in `scripts/ux/checks.js` if it can be measured).
 - Duel pacing (how long each moment holds before the next / before a decision) lives in `src/shared/pacing.ts`;
   the client waits it out (animator.settle + the socket queue in `useDuel.ts`), the server doesn't charge the
@@ -30,9 +33,18 @@ Live: https://ygo-platform.stevenbliu.workers.dev · repo stevenbliu/ygo-platfor
 - `npm run e2e`: Playwright smoke test (`e2e/*.e2e.ts`) against `BASE_URL` (default localhost:8788).
 - `npm run ux`: duel UX audit (`scripts/ux/audit.mjs`): demo duels at 1920x1080 / 1366x768 / phone, checks at each
   sampled moment, report in `ux-report/` (`--secs`, `--every`, `--sizes`, `--base`).
+- `npm run scenes`: scene tests (`scripts/ux/scenes.pw.ts`, config `playwright.scenes.config.ts`): every recorded
+  moment in `public/scenes/` at 1920x1080 / 1366x768: UX checks, axe, screenshot baselines (per machine, in the
+  gitignored `scripts/ux/baselines/`; `SCENE_SHOTS=0` skips them), and splash timing in the summon lab.
+  `npm run scenes:record` (`scripts/ux/record-scenes.mjs`, `--only a,b`, `--secs`) records the fixtures from demo duels.
+- Stutters: `UX_SOURCEMAP=1 npm run build` writes hidden source maps; then the audit names the file:line behind
+  each long frame, and `node scripts/ux/profile.mjs [secs]` CPU-profiles a demo duel by source file
+  (`ux-report/duel.cpuprofile`). Long frames with no script / layout work are "frame-delay" (headless has no
+  GPU), not page code.
 - `node scripts/ux/pacing-probe.mjs [secs]`: timeline of draws / splashes / banners / decisions in a demo duel.
 - `node scripts/long-demo.mjs [secs]`: long demo duel against localhost (memory diagnostics).
-- CI (`.github/workflows/deploy.yml`) on push to main: tests, D1 migrations, deploy, e2e against the live site.
+- CI (`.github/workflows/deploy.yml`) on push to main: tests, D1 migrations, deploy, e2e and the scene checks
+  (no screenshots) against the live site.
 
 ## Map
 - `src/shared/`: types and pure logic used by both sides (duel.ts messages/board, duelActions, enginePrompts,
@@ -48,7 +60,8 @@ Live: https://ygo-platform.stevenbliu.workers.dev · repo stevenbliu/ygo-platfor
   (`/dev/summons`), `FxLab`, `FoilLab` are labs / viewers.
 - `src/client/components/duel/`: board and UI. `Board.tsx`, `DuelParts.tsx` (player bar, phase cells, Now panel...),
   `DuelFx.tsx` (turn banner, end overlay), `PreDuel.tsx` (room setup), `useDuel.ts` (socket + card data),
-  `uiScale.ts` (scaled page), `duelSettings.ts` (⚙ settings), `replay.ts` (IndexedDB replays).
+  `uiScale.ts` (scaled page), `duelSettings.ts` (⚙ settings), `replay.ts` (IndexedDB replays),
+  `sceneSocket.ts` (`/duel/scene-<name>`: replays a `public/scenes/` fixture instead of a real room).
   - CSS: `duel-scene.css` only `@import`s `scene/*.css` **in order** (base, board, panels, resolve, clocks, late);
     later files override earlier ones, so keep the order.
 - `src/client/components/duel/anim/`: animation pipeline: `intents.ts` (engine events -> intents, incl. turn /
@@ -58,5 +71,6 @@ Live: https://ygo-platform.stevenbliu.workers.dev · repo stevenbliu/ygo-platfor
   and `fx.ts`, `resolveFx.ts`. Sound: `sfx.ts` (play, music, public API; `sound/synth.ts` building blocks,
   `sound/themes.ts` per-theme sounds).
 - `src/client/components/engine/`: engine prompts UI and the in-browser host runtime (`hostRuntime.ts`).
-- `scripts/`: card / engine data import, CSS generators, dev server guard, diagnostics; `scripts/ux/` the UX audit.
+- `scripts/`: card / engine data import, CSS generators, dev server guard, diagnostics; `scripts/ux/` the UX tooling (audit, checks.js,
+  scenes, recorder, profiler, sourcemap.mjs).
 - `docs/ux-rubric.md`: what a good duel screen does (the audit's rules).

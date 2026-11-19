@@ -119,7 +119,7 @@
 .duel-chip {
   font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
 }
-.duel-chip.is-beta { color: var(--warn); border-color: var(--warn); }
+.duel-chip.is-beta { color: color-mix(in srgb, var(--warn) 60%, var(--fg)); border-color: var(--warn); }   /* (mixed toward the text colour: readable on any theme) */
 .duel-chip.is-turn { color: var(--accent); border-color: var(--accent); }
 
 .duel-phasebar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -127,7 +127,7 @@
 .duel-phases { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
 .duel-phases button { padding: 4px 8px; font-size: 12px; font-weight: 600; }
 .duel-phases button.is-active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); opacity: 1; }
-button.is-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
+button.is-danger { color: color-mix(in srgb, var(--danger) 75%, var(--fg)); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
 
 /* ---------- side panel ---------- */
 .duel-preview { display: flex; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }

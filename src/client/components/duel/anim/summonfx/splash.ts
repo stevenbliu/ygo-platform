@@ -82,15 +82,16 @@ function banner(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: n
   el.querySelector("b")!.textContent = o.name;
   const dir = from === "left" ? -1 : 1;
   run(el, [
-    { transform: `skewY(-5deg) translateX(${dir * 105}%)`, opacity: 0 },
+    // (easing per segment: an easing on the whole animation warps the offsets and the hold ended near half way)
+    { transform: `skewY(-5deg) translateX(${dir * 105}%)`, opacity: 0, easing: "cubic-bezier(.2,.8,.3,1)" },
     { offset: 0.16, transform: `skewY(-5deg) translateX(${-dir * 2}%)`, opacity: 1 },
     { offset: 0.24, transform: "skewY(-5deg) translateX(0)", opacity: 1 },
-    { offset: 0.8, transform: `skewY(-5deg) translateX(${-dir * 3}%)`, opacity: 1 },
+    { offset: 0.8, transform: `skewY(-5deg) translateX(${-dir * 3}%)`, opacity: 1, easing: "ease-in" },
     { transform: `skewY(-5deg) translateX(${-dir * 110}%)`, opacity: 0 },
-  ], { duration: ms, delay: wait, easing: "cubic-bezier(.3,.7,.3,1)", fill: "both" });
+  ], { duration: ms, delay: wait, easing: "linear", fill: "both" });
   run(el.querySelector(".sfx-splash-art")!, [{ backgroundPosition: `${50 + dir * 8}% 30%` }, { backgroundPosition: `${50 - dir * 8}% 40%` }], { duration: ms, delay: wait, easing: "linear", fill: "both" });
-  run(el.querySelector(".sfx-splash-text")!, [{ transform: `translateX(${dir * 60}px)`, opacity: 0 }, { offset: 0.25, transform: `translateX(${dir * 60}px)`, opacity: 0 }, { offset: 0.38, transform: "translateX(0)", opacity: 1 }, { offset: 0.8, opacity: 1 }, { opacity: 0 }],
-    { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
+  run(el.querySelector(".sfx-splash-text")!, [{ transform: `translateX(${dir * 60}px)`, opacity: 0 }, { offset: 0.25, transform: `translateX(${dir * 60}px)`, opacity: 0, easing: "ease-out" }, { offset: 0.38, transform: "translateX(0)", opacity: 1 }, { offset: 0.8, opacity: 1 }, { opacity: 0 }],
+    { duration: ms, delay: wait, easing: "linear", fill: "both" });
   return wait + ms * 0.66;
 }
 
@@ -196,9 +197,10 @@ function comic(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: nu
     `<div class="sfx-comic-burst"></div><div class="sfx-comic-frame"><div class="sfx-comic-art"></div></div><div class="sfx-comic-text"><small></small><b></b></div>`);
   el.querySelector("small")!.textContent = o.kicker;
   el.querySelector("b")!.textContent = o.name;
-  run(el, [{ transform: "scale(0) rotate(-20deg)", opacity: 0 }, { offset: 0.12, transform: "scale(1.15) rotate(4deg)", opacity: 1 }, { offset: 0.18, transform: "scale(.96) rotate(-2deg)" },
-    { offset: 0.24, transform: "scale(1) rotate(0deg)" }, { offset: 0.8, transform: "scale(1.02) rotate(1deg)", opacity: 1 }, { transform: "scale(.2) rotate(15deg)", opacity: 0 }],
-    { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
+  // easing per keyframe, the effect linear (whole-effect easing would move the 0.8 hold point earlier)
+  run(el, [{ transform: "scale(0) rotate(-20deg)", opacity: 0, easing: "ease-out" }, { offset: 0.12, transform: "scale(1.15) rotate(4deg)", opacity: 1, easing: "ease-out" }, { offset: 0.18, transform: "scale(.96) rotate(-2deg)", easing: "ease-out" },
+    { offset: 0.24, transform: "scale(1) rotate(0deg)" }, { offset: 0.8, transform: "scale(1.02) rotate(1deg)", opacity: 1, easing: "ease-in" }, { transform: "scale(.2) rotate(15deg)", opacity: 0 }],
+    { duration: ms, delay: wait, easing: "linear", fill: "both" });
   run(el.querySelector(".sfx-comic-burst")!, [{ transform: "rotate(0deg)" }, { transform: "rotate(25deg)" }], { duration: ms, delay: wait, easing: "linear", fill: "both" });
   return wait + ms * 0.82;
 }
